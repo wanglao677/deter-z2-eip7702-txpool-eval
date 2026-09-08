@@ -1,0 +1,12 @@
+participants:
+  - el_type: besu
+    el_image: hyperledger/besu:26.6.1
+    cl_type: lighthouse
+    count: 1
+
+network_params:
+  network_id: "13371353"
+  seconds_per_slot: 30
+
+additional_services:
+  - dora

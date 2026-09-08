@@ -1,0 +1,250 @@
+{
+  "baseFeeGwei": {
+    "avg": 0.102220437,
+    "count": 15000,
+    "max": 1.011708717,
+    "median": 0.066269882,
+    "min": 0.028853077,
+    "p10": 0.043815473,
+    "p25": 0.04834973,
+    "p50": 0.066269882,
+    "p75": 0.103059757,
+    "p90": 0.190557338,
+    "p95": 0.291699427,
+    "p99": 0.606886563
+  },
+  "collectedBlocks": 15000,
+  "dataKind": "block-level gas price percentile history",
+  "effectiveGasPriceGwei": {
+    "effectiveP10Gwei": {
+      "avg": 0.111962433,
+      "count": 15000,
+      "max": 43.492517147,
+      "median": 0.067885646,
+      "min": 0.028996077,
+      "p10": 0.044301997,
+      "p25": 0.048988726,
+      "p50": 0.067885646,
+      "p75": 0.107111207,
+      "p90": 0.204746779,
+      "p95": 0.336580478,
+      "p99": 0.669664617
+    },
+    "effectiveP25Gwei": {
+      "avg": 0.136596198,
+      "count": 15000,
+      "max": 48.579758989,
+      "median": 0.072924045,
+      "min": 0.031830214,
+      "p10": 0.045032983,
+      "p25": 0.050360664,
+      "p50": 0.072924045,
+      "p75": 0.122242752,
+      "p90": 0.255836255,
+      "p95": 0.447794716,
+      "p99": 0.925448696
+    },
+    "effectiveP50Gwei": {
+      "avg": 0.234950964,
+      "count": 15000,
+      "max": 60.038940869,
+      "median": 0.106693021,
+      "min": 0.031830214,
+      "p10": 0.050758191,
+      "p25": 0.064119805,
+      "p50": 0.106693021,
+      "p75": 0.228851867,
+      "p90": 0.501972225,
+      "p95": 0.790646453,
+      "p99": 1.674337449
+    },
+    "effectiveP75Gwei": {
+      "avg": 0.729361457,
+      "count": 15000,
+      "max": 1457.33501662,
+      "median": 0.362750817,
+      "min": 0.035159229,
+      "p10": 0.103412561,
+      "p25": 0.177691439,
+      "p50": 0.362750817,
+      "p75": 0.754536954,
+      "p90": 1.202292985,
+      "p95": 1.772365394,
+      "p99": 2.726188424
+    },
+    "effectiveP90Gwei": {
+      "avg": 1.818739846,
+      "count": 15000,
+      "max": 1457.33501662,
+      "median": 1.257574896,
+      "min": 0.035159229,
+      "p10": 0.648484868,
+      "p25": 1.046310344,
+      "p50": 1.257574896,
+      "p75": 2.06180234,
+      "p90": 2.199397632,
+      "p95": 2.535383548,
+      "p99": 6.654903358
+    }
+  },
+  "estimatedTransactionFeeEth": {
+    "102920": {
+      "effectiveP50Gwei": {
+        "avg": 2.4181153e-05,
+        "median": 1.0980846e-05,
+        "p75": 2.3553434e-05,
+        "p90": 5.1662981e-05
+      },
+      "effectiveP75Gwei": {
+        "avg": 7.5065881e-05,
+        "median": 3.7334314e-05,
+        "p75": 7.7656943e-05,
+        "p90": 0.000123739994
+      },
+      "effectiveP90Gwei": {
+        "avg": 0.000187184705,
+        "median": 0.000129429608,
+        "p75": 0.000212200697,
+        "p90": 0.000226362004
+      }
+    },
+    "21000": {
+      "effectiveP50Gwei": {
+        "avg": 4.93397e-06,
+        "median": 2.240553e-06,
+        "p75": 4.805889e-06,
+        "p90": 1.0541417e-05
+      },
+      "effectiveP75Gwei": {
+        "avg": 1.5316591e-05,
+        "median": 7.617767e-06,
+        "p75": 1.5845276e-05,
+        "p90": 2.5248153e-05
+      },
+      "effectiveP90Gwei": {
+        "avg": 3.8193537e-05,
+        "median": 2.6409073e-05,
+        "p75": 4.3297849e-05,
+        "p90": 4.618735e-05
+      }
+    }
+  },
+  "firstBlock": 25919672,
+  "gasUsedRatio": {
+    "avg": 0.506051868,
+    "count": 15000,
+    "max": 0.999999767,
+    "median": 0.481074833,
+    "min": 0.0,
+    "p10": 0.209743323,
+    "p25": 0.369652642,
+    "p50": 0.481074833,
+    "p75": 0.628497804,
+    "p90": 0.838759623,
+    "p95": 0.979330381,
+    "p99": 0.999748684
+  },
+  "lastBlock": 25934671,
+  "notes": [
+    "effectiveGasPrice is estimated as baseFeePerGas + effective priority fee percentile.",
+    "This is block-level fee-market history, not per-transaction receipt-level average cost.",
+    "Use BigQuery or receipts for formal gasUsed * effectiveGasPrice transaction-fee statistics.",
+    "fee_history.partial.csv is written after every chunk so long scans keep usable intermediate output."
+  ],
+  "percentiles": [
+    10,
+    25,
+    50,
+    75,
+    90
+  ],
+  "priorityFeeGwei": {
+    "rewardP10Gwei": {
+      "avg": 0.009741996,
+      "count": 15000,
+      "max": 43.430555156,
+      "median": 0.000101478,
+      "min": 0.0,
+      "p10": 0.0,
+      "p25": 0.0,
+      "p50": 0.000101478,
+      "p75": 0.00017,
+      "p90": 0.004399976,
+      "p95": 0.0132,
+      "p99": 0.15
+    },
+    "rewardP25Gwei": {
+      "avg": 0.034375761,
+      "count": 15000,
+      "max": 48.517796998,
+      "median": 0.001,
+      "min": 0.0,
+      "p10": 0.000102606,
+      "p25": 0.000159827,
+      "p50": 0.001,
+      "p75": 0.01,
+      "p90": 0.050000001,
+      "p95": 0.120913748,
+      "p99": 0.532869352
+    },
+    "rewardP50Gwei": {
+      "avg": 0.132730527,
+      "count": 15000,
+      "max": 60.002201093,
+      "median": 0.035,
+      "min": 0.0,
+      "p10": 0.002176241,
+      "p25": 0.01,
+      "p50": 0.035,
+      "p75": 0.102,
+      "p90": 0.253928585,
+      "p95": 0.5625,
+      "p99": 1.417218705
+    },
+    "rewardP75Gwei": {
+      "avg": 0.62714102,
+      "count": 15000,
+      "max": 1457.266614432,
+      "median": 0.27721009,
+      "min": 0.0,
+      "p10": 0.052307245,
+      "p25": 0.112315791,
+      "p50": 0.27721009,
+      "p75": 0.6,
+      "p90": 1.0,
+      "p95": 1.5,
+      "p99": 2.352883134
+    },
+    "rewardP90Gwei": {
+      "avg": 1.716519409,
+      "count": 15000,
+      "max": 1457.266614432,
+      "median": 1.145793859,
+      "min": 0.0,
+      "p10": 0.6,
+      "p25": 1.0,
+      "p50": 1.145793859,
+      "p75": 2.0,
+      "p90": 2.0,
+      "p95": 2.114779753,
+      "p99": 6.491222349
+    }
+  },
+  "recommendedExperimentGasPriceGwei": {
+    "attackerFromMedianEffectiveP90": 1.257574896,
+    "normalFromAverageEffectiveP50": 0.234950964,
+    "normalFromMedianEffectiveP50": 0.106693021,
+    "normalFromP75EffectiveP50": 0.228851867
+  },
+  "requestedBlocks": 15000,
+  "requestedEndBlock": "finalized",
+  "resolvedEndBlockSource": "finalized",
+  "rpcEndpoint": "https://eth-mainnet.g.alchemy.com/...",
+  "source": "eth_feeHistory",
+  "unitNotes": {
+    "baseFeeGwei": "Per-gas base fee for each sampled block.",
+    "effectiveGasPriceGwei": "Per-gas estimate: baseFeePerGas + priority fee percentile.",
+    "estimatedTransactionFeeEth": "Derived estimate only: effective gas price multiplied by reference gasUsed.",
+    "priorityFeeGwei": "Per-gas effective priority fee percentiles from eth_feeHistory.reward."
+  }
+}

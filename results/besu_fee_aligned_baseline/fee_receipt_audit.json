@@ -1,0 +1,27 @@
+{
+  "chainId": 13371353,
+  "firstBlock": 9,
+  "lastBlock": 32,
+  "groups": {
+    "normal": {
+      "included": 11200,
+      "successful": 11200,
+      "uniqueSenders": 100,
+      "gasUsedHistogram": {
+        "102920": 11200
+      },
+      "paddingBytesHistogram": {
+        "unspecified": 11200
+      },
+      "feeWei": 18116572083314158680
+    },
+    "attack": {
+      "included": 0,
+      "successful": 0,
+      "uniqueSenders": 0,
+      "gasUsedHistogram": {},
+      "paddingBytesHistogram": {},
+      "feeWei": 0
+    }
+  }
+}

@@ -1,0 +1,6 @@
+phase,startBlock,endBlock,startGlobalTick,endGlobalTick,normalEnabled,attackEnabled
+warmup,8,10,1,2,True,False
+saturation,10,14,3,6,True,False
+control,14,18,7,10,True,False
+recovery,18,22,11,14,True,False
+drain,22,32,15,24,False,False

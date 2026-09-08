@@ -1,0 +1,28 @@
+{
+  "rpc": "https://eth-mainnet.g.alchemy.com/...",
+  "latestBlockAtScanStart": 25921338,
+  "startBlock": 25906339,
+  "endBlock": 25921338,
+  "blocksScanned": 15000,
+  "blocksSucceeded": 15000,
+  "blocksFailed": 0,
+  "failedBlocks": [],
+  "blocksWith7702": 13866,
+  "total7702Txs": 65692,
+  "blocksWithRepeated7702Sender": 1726,
+  "max7702TxsPerSenderInOneBlock": 38,
+  "max7702SenderBlock": 25917302,
+  "max7702Sender": "0x7c2fff414dfdbbd379ba5685effd160b44aa7f61",
+  "continueOnError": true,
+  "checkpointEvery": 100,
+  "outputs": {
+    "blockSummaryCsv": "/home/wh/ETH/pos-exp/go-ethereum-pos/devtools/mpfuzz_style_exp5_pos/scale_runs/rpc_7702_block_scan_25906339_25921338_20260906_163651/block_7702_summary.csv",
+    "senderCsv": "/home/wh/ETH/pos-exp/go-ethereum-pos/devtools/mpfuzz_style_exp5_pos/scale_runs/rpc_7702_block_scan_25906339_25921338_20260906_163651/block_7702_senders.csv",
+    "txCsv": "/home/wh/ETH/pos-exp/go-ethereum-pos/devtools/mpfuzz_style_exp5_pos/scale_runs/rpc_7702_block_scan_25906339_25921338_20260906_163651/eip7702_txs.csv"
+  },
+  "notes": [
+    "EIP-7702 detection uses tx.type == 0x4, with authorizationList as fallback.",
+    "Sender grouping uses the transaction 'from' address returned by JSON-RPC.",
+    "Authorization-list signer recovery is not performed by this script."
+  ]
+}

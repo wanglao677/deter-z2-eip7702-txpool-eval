@@ -1,0 +1,14 @@
+participants:
+  - el_type: erigon
+    el_image: erigontech/erigon:latest
+    cl_type: lighthouse
+    count: 1
+    el_extra_params:
+      - "--rpc.txfeecap=0"
+
+network_params:
+  network_id: "13371350"
+  seconds_per_slot: 300
+
+additional_services:
+  - dora

@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="760" viewBox="0 0 1200 760">
+<style>text{font-family:Arial,Helvetica,sans-serif;}</style>
+<rect width="100%" height="100%" fill="white"/>
+<text x="96.00" y="48.00" text-anchor="start" font-size="26" font-weight="800" fill="#18181b">Realistic-Fee Normal Gas Price Distribution on Besu</text>
+<text x="96.00" y="75.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Normal gas prices are sampled from mainnet fee history, then scaled, jittered, floored, capped, and assigned by the configured strategy.</text>
+<text x="96.00" y="96.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">count=11200; min=0.05 gwei; median=0.11 gwei; avg=0.22 gwei; max=1.67 gwei</text>
+<text x="96.00" y="117.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">floor hits=1404; cap hits=138; strategy=per-tx</text>
+<rect x="96.00" y="155.00" width="1016.00" height="215.00" fill="white" stroke="#27272a" stroke-width="1"/>
+<text x="96.00" y="141.00" text-anchor="start" font-size="15" font-weight="700" fill="#18181b">Overall normal gas price distribution</text>
+<line x1="96.00" y1="370.00" x2="1112.00" y2="370.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="374.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">0</text>
+<line x1="96.00" y1="316.25" x2="1112.00" y2="316.25" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="320.25" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">2500</text>
+<line x1="96.00" y1="262.50" x2="1112.00" y2="262.50" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="266.50" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">5000</text>
+<line x1="96.00" y1="208.75" x2="1112.00" y2="208.75" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="212.75" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">7500</text>
+<line x1="96.00" y1="155.00" x2="1112.00" y2="155.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="159.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">10000</text>
+<text x="38.00" y="262.50" text-anchor="middle" font-size="12" fill="#52525b" transform="rotate(-90 38.00 262.50)">Transactions</text>
+<rect x="98.00" y="252.85" width="29.87" height="117.15" fill="#2563eb" opacity="0.78"/>
+<rect x="131.87" y="331.36" width="29.87" height="38.64" fill="#2563eb" opacity="0.78"/>
+<rect x="165.73" y="349.96" width="29.87" height="20.04" fill="#2563eb" opacity="0.78"/>
+<rect x="199.60" y="356.63" width="29.87" height="13.37" fill="#2563eb" opacity="0.78"/>
+<rect x="233.47" y="360.24" width="29.87" height="9.76" fill="#2563eb" opacity="0.78"/>
+<rect x="267.33" y="362.45" width="29.87" height="7.55" fill="#2563eb" opacity="0.78"/>
+<rect x="301.20" y="364.65" width="29.87" height="5.35" fill="#2563eb" opacity="0.78"/>
+<rect x="335.07" y="365.89" width="29.87" height="4.11" fill="#2563eb" opacity="0.78"/>
+<rect x="368.93" y="366.54" width="29.87" height="3.46" fill="#2563eb" opacity="0.78"/>
+<rect x="402.80" y="367.72" width="29.87" height="2.28" fill="#2563eb" opacity="0.78"/>
+<rect x="436.67" y="367.94" width="29.87" height="2.06" fill="#2563eb" opacity="0.78"/>
+<rect x="470.53" y="367.91" width="29.87" height="2.09" fill="#2563eb" opacity="0.78"/>
+<rect x="504.40" y="367.96" width="29.87" height="2.04" fill="#2563eb" opacity="0.78"/>
+<rect x="538.27" y="368.43" width="29.87" height="1.57" fill="#2563eb" opacity="0.78"/>
+<rect x="572.13" y="368.80" width="29.87" height="1.20" fill="#2563eb" opacity="0.78"/>
+<rect x="606.00" y="369.10" width="29.87" height="0.90" fill="#2563eb" opacity="0.78"/>
+<rect x="639.87" y="369.29" width="29.87" height="0.71" fill="#2563eb" opacity="0.78"/>
+<rect x="673.73" y="369.40" width="29.87" height="0.60" fill="#2563eb" opacity="0.78"/>
+<rect x="707.60" y="369.16" width="29.87" height="0.84" fill="#2563eb" opacity="0.78"/>
+<rect x="741.47" y="369.38" width="29.87" height="0.62" fill="#2563eb" opacity="0.78"/>
+<rect x="775.33" y="369.46" width="29.87" height="0.54" fill="#2563eb" opacity="0.78"/>
+<rect x="809.20" y="369.31" width="29.87" height="0.69" fill="#2563eb" opacity="0.78"/>
+<rect x="843.07" y="369.74" width="29.87" height="0.26" fill="#2563eb" opacity="0.78"/>
+<rect x="876.93" y="369.66" width="29.87" height="0.34" fill="#2563eb" opacity="0.78"/>
+<rect x="910.80" y="369.46" width="29.87" height="0.54" fill="#2563eb" opacity="0.78"/>
+<rect x="944.67" y="369.74" width="29.87" height="0.26" fill="#2563eb" opacity="0.78"/>
+<rect x="978.53" y="369.72" width="29.87" height="0.28" fill="#2563eb" opacity="0.78"/>
+<rect x="1012.40" y="369.74" width="29.87" height="0.26" fill="#2563eb" opacity="0.78"/>
+<rect x="1046.27" y="369.83" width="29.87" height="0.17" fill="#2563eb" opacity="0.78"/>
+<rect x="1080.13" y="366.88" width="29.87" height="3.12" fill="#dc2626" opacity="0.78"/>
+<line x1="96.00" y1="155.00" x2="96.00" y2="370.00" stroke="#71717a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="96.00" y="390.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">0.05</text>
+<line x1="131.98" y1="155.00" x2="131.98" y2="370.00" stroke="#71717a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="131.98" y="390.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">0.11</text>
+<line x1="1112.00" y1="155.00" x2="1112.00" y2="370.00" stroke="#71717a" stroke-width="1" stroke-dasharray="4 4"/>
+<text x="1112.00" y="390.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">1.67</text>
+<text x="604.00" y="412.00" text-anchor="middle" font-size="13" font-weight="400" fill="#52525b">Gas price (gwei)</text>
+<text x="862.00" y="179.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">blue: sampled prices</text>
+<text x="862.00" y="200.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">red: cap bucket</text>
+<rect x="96.00" y="485.00" width="1016.00" height="165.00" fill="white" stroke="#27272a" stroke-width="1"/>
+<text x="96.00" y="471.00" text-anchor="start" font-size="15" font-weight="700" fill="#18181b">Per-phase-tick gas price spread</text>
+<line x1="96.00" y1="650.00" x2="1112.00" y2="650.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="654.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">0</text>
+<line x1="96.00" y1="608.75" x2="1112.00" y2="608.75" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="612.75" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">0.5</text>
+<line x1="96.00" y1="567.50" x2="1112.00" y2="567.50" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="571.50" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">1</text>
+<line x1="96.00" y1="526.25" x2="1112.00" y2="526.25" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="530.25" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">1.5</text>
+<line x1="96.00" y1="485.00" x2="1112.00" y2="485.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="86.00" y="489.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">2</text>
+<text x="38.00" y="567.50" text-anchor="middle" font-size="12" fill="#52525b" transform="rotate(-90 38.00 567.50)">Gas price (gwei)</text>
+<line x1="96.00" y1="645.81" x2="96.00" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="79.00" y="630.48" width="34.00" height="14.07" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="79.00" y1="640.87" x2="113.00" y2="640.87" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="96.00" cy="631.57" r="2.8" fill="#111827"/>
+<text x="96.00" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">1</text>
+<line x1="174.15" y1="645.81" x2="174.15" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="157.15" y="631.65" width="34.00" height="12.88" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="157.15" y1="641.13" x2="191.15" y2="641.13" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="174.15" cy="631.79" r="2.8" fill="#111827"/>
+<text x="174.15" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">2</text>
+<line x1="252.31" y1="645.81" x2="252.31" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="235.31" y="628.92" width="34.00" height="15.78" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="235.31" y1="641.09" x2="269.31" y2="641.09" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="252.31" cy="631.39" r="2.8" fill="#111827"/>
+<line x1="330.46" y1="645.81" x2="330.46" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="313.46" y="630.52" width="34.00" height="14.05" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="313.46" y1="640.98" x2="347.46" y2="640.98" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="330.46" cy="632.06" r="2.8" fill="#111827"/>
+<text x="330.46" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">4</text>
+<line x1="408.62" y1="645.81" x2="408.62" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="391.62" y="631.62" width="34.00" height="13.19" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="391.62" y1="641.11" x2="425.62" y2="641.11" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="408.62" cy="632.36" r="2.8" fill="#111827"/>
+<line x1="486.77" y1="645.81" x2="486.77" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="469.77" y="630.50" width="34.00" height="14.13" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="469.77" y1="641.58" x2="503.77" y2="641.58" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="486.77" cy="632.62" r="2.8" fill="#111827"/>
+<text x="486.77" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">6</text>
+<line x1="564.92" y1="645.81" x2="564.92" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="547.92" y="629.89" width="34.00" height="14.67" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="547.92" y1="640.70" x2="581.92" y2="640.70" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="564.92" cy="631.41" r="2.8" fill="#111827"/>
+<line x1="643.08" y1="645.81" x2="643.08" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="626.08" y="631.25" width="34.00" height="13.64" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="626.08" y1="641.52" x2="660.08" y2="641.52" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="643.08" cy="632.26" r="2.8" fill="#111827"/>
+<text x="643.08" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">8</text>
+<line x1="721.23" y1="645.81" x2="721.23" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="704.23" y="632.50" width="34.00" height="12.04" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="704.23" y1="641.00" x2="738.23" y2="641.00" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="721.23" cy="634.12" r="2.8" fill="#111827"/>
+<line x1="799.38" y1="645.81" x2="799.38" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="782.38" y="631.31" width="34.00" height="13.37" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="782.38" y1="640.96" x2="816.38" y2="640.96" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="799.38" cy="632.71" r="2.8" fill="#111827"/>
+<text x="799.38" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">10</text>
+<line x1="877.54" y1="645.81" x2="877.54" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="860.54" y="632.03" width="34.00" height="12.81" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="860.54" y1="640.79" x2="894.54" y2="640.79" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="877.54" cy="632.51" r="2.8" fill="#111827"/>
+<line x1="955.69" y1="645.81" x2="955.69" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="938.69" y="630.28" width="34.00" height="14.25" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="938.69" y1="640.95" x2="972.69" y2="640.95" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="955.69" cy="632.11" r="2.8" fill="#111827"/>
+<text x="955.69" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">12</text>
+<line x1="1033.85" y1="645.81" x2="1033.85" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="1016.85" y="630.49" width="34.00" height="14.18" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="1016.85" y1="641.24" x2="1050.85" y2="641.24" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="1033.85" cy="631.15" r="2.8" fill="#111827"/>
+<line x1="1112.00" y1="645.81" x2="1112.00" y2="511.87" stroke="#0f766e" stroke-width="2"/>
+<rect x="1095.00" y="632.26" width="34.00" height="12.58" fill="#93c5fd" stroke="#1d4ed8" stroke-width="1.3" opacity="0.9"/>
+<line x1="1095.00" y1="641.33" x2="1129.00" y2="641.33" stroke="#dc2626" stroke-width="2.4"/>
+<circle cx="1112.00" cy="632.44" r="2.8" fill="#111827"/>
+<text x="1112.00" y="671.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">14</text>
+<text x="604.00" y="693.00" text-anchor="middle" font-size="13" font-weight="400" fill="#52525b">Aligned phase tick</text>
+<text x="782.00" y="509.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">box: p25-p75; red: median; dot: mean</text>
+<text x="96.00" y="725.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Output data: /home/wh/ETH/pos-exp/go-ethereum-pos/devtools/mpfuzz_style_exp5_pos/scale_runs/besu_realistic_fee_baseline_normal_fee_distribution.csv</text>
+</svg>

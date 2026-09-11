@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="720" viewBox="0 0 1180 720">
+<style>text{font-family:Arial,Helvetica,sans-serif;}</style>
+<rect width="100%" height="100%" fill="white"/>
+<text x="112.00" y="46.00" text-anchor="start" font-size="26" font-weight="800" fill="#18181b">Paper-like Tx Fee per Block for Deter-Z2 on Besu</text>
+<text x="112.00" y="76.00" text-anchor="start" font-size="13" font-weight="400" fill="#52525b">Attack-run fees: sum of receipt gasUsed x effectiveGasPrice.</text>
+<text x="112.00" y="98.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Baseline: estimated reference (dashed).</text>
+<text x="149.92" y="153.00" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">Warmup</text>
+<text x="263.67" y="153.00" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">Saturation</text>
+<text x="415.33" y="153.00" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">Attack on</text>
+<text x="567.00" y="153.00" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">Recovery</text>
+<text x="832.42" y="153.00" text-anchor="middle" font-size="12" font-weight="700" fill="#52525b">Drain</text>
+<rect x="112.00" y="170.00" width="910.00" height="360.00" fill="white" stroke="#27272a" stroke-width="1"/>
+<line x1="112.00" y1="530.00" x2="1022.00" y2="530.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="100.00" y="534.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">0</text>
+<text x="1034.00" y="534.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">0</text>
+<line x1="112.00" y1="440.00" x2="1022.00" y2="440.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="100.00" y="444.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">50.0</text>
+<text x="1034.00" y="444.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">1.25</text>
+<line x1="112.00" y1="350.00" x2="1022.00" y2="350.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="100.00" y="354.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">100</text>
+<text x="1034.00" y="354.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">2.5</text>
+<line x1="112.00" y1="260.00" x2="1022.00" y2="260.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="100.00" y="264.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">150</text>
+<text x="1034.00" y="264.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">3.75</text>
+<line x1="112.00" y1="170.00" x2="1022.00" y2="170.00" stroke="#d4d4d8" stroke-width="1"/>
+<text x="100.00" y="174.00" text-anchor="end" font-size="12" font-weight="400" fill="#52525b">200</text>
+<text x="1034.00" y="174.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">5</text>
+<line x1="130.96" y1="530.00" x2="130.96" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="130.96" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">1</text>
+<line x1="168.88" y1="530.00" x2="168.88" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="168.88" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">2</text>
+<line x1="206.79" y1="530.00" x2="206.79" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="244.71" y1="530.00" x2="244.71" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="244.71" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">4</text>
+<line x1="282.62" y1="530.00" x2="282.62" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="320.54" y1="530.00" x2="320.54" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="320.54" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">6</text>
+<line x1="358.46" y1="530.00" x2="358.46" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="396.38" y1="530.00" x2="396.38" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="396.38" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">8</text>
+<line x1="434.29" y1="530.00" x2="434.29" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="472.21" y1="530.00" x2="472.21" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="472.21" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">10</text>
+<line x1="510.12" y1="530.00" x2="510.12" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="548.04" y1="530.00" x2="548.04" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="548.04" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">12</text>
+<line x1="585.96" y1="530.00" x2="585.96" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="623.88" y1="530.00" x2="623.88" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="623.88" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">14</text>
+<line x1="661.79" y1="530.00" x2="661.79" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="699.71" y1="530.00" x2="699.71" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="699.71" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">16</text>
+<line x1="737.62" y1="530.00" x2="737.62" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="775.54" y1="530.00" x2="775.54" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="775.54" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">18</text>
+<line x1="813.46" y1="530.00" x2="813.46" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="851.38" y1="530.00" x2="851.38" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="851.38" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">20</text>
+<line x1="889.29" y1="530.00" x2="889.29" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="927.21" y1="530.00" x2="927.21" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="927.21" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">22</text>
+<line x1="965.12" y1="530.00" x2="965.12" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<line x1="1003.04" y1="530.00" x2="1003.04" y2="535.00" stroke="#27272a" stroke-width="1"/>
+<text x="1003.04" y="552.00" text-anchor="middle" font-size="12" font-weight="400" fill="#52525b">24</text>
+<text x="46.00" y="350.00" text-anchor="middle" font-size="13" fill="#52525b" transform="rotate(-90 46.00 350.00)">Normal tx fee per block (10^-2 ETH)</text>
+<text x="1100.00" y="350.00" text-anchor="middle" font-size="13" fill="#52525b" transform="rotate(90 1100.00 350.00)">Adversarial tx fee per block (ETH)</text>
+<text x="567.00" y="585.00" text-anchor="middle" font-size="13" font-weight="400" fill="#52525b">Aligned phase tick</text>
+<rect x="112.00" y="170.00" width="75.83" height="360.00" fill="#f8fafc" opacity="0.45"/>
+<line x1="112.00" y1="170.00" x2="112.00" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="187.83" y="170.00" width="151.67" height="360.00" fill="#f8fafc" opacity="0.45"/>
+<line x1="187.83" y1="170.00" x2="187.83" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="339.50" y="170.00" width="151.67" height="360.00" fill="#fff1f2" opacity="0.95"/>
+<line x1="339.50" y1="170.00" x2="339.50" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="491.17" y="170.00" width="151.67" height="360.00" fill="#f8fafc" opacity="0.45"/>
+<line x1="491.17" y1="170.00" x2="491.17" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="642.83" y="170.00" width="379.17" height="360.00" fill="#f8fafc" opacity="0.45"/>
+<line x1="642.83" y1="170.00" x2="642.83" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1022.00" y1="170.00" x2="1022.00" y2="530.00" stroke="#a1a1aa" stroke-width="1" stroke-dasharray="4 4"/>
+<polyline points="130.96,342.24 168.88,342.24 206.79,342.24" fill="none" stroke="#2563eb" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+<circle cx="130.96" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="168.88" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="206.79" cy="342.24" r="4.80" fill="#2563eb"/>
+<polyline points="320.54,342.24 358.46,342.24 396.38,342.24 434.29,342.24 472.21,342.24 510.12,342.24 548.04,342.24 585.96,342.24 623.88,342.24 661.79,342.24 699.71,342.24 737.62,437.09 775.54,530.00 813.46,530.00 851.38,530.00 889.29,530.00 927.21,530.00" fill="none" stroke="#2563eb" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6 4"/>
+<circle cx="320.54" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="358.46" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="396.38" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="434.29" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="472.21" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="510.12" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="548.04" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="585.96" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="623.88" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="661.79" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="699.71" cy="342.24" r="4.80" fill="#2563eb"/>
+<circle cx="737.62" cy="437.09" r="4.80" fill="#2563eb"/>
+<circle cx="775.54" cy="530.00" r="4.80" fill="#2563eb"/>
+<circle cx="813.46" cy="530.00" r="4.80" fill="#2563eb"/>
+<circle cx="851.38" cy="530.00" r="4.80" fill="#2563eb"/>
+<circle cx="889.29" cy="530.00" r="4.80" fill="#2563eb"/>
+<circle cx="927.21" cy="530.00" r="4.80" fill="#2563eb"/>
+<polyline points="130.96,404.40 168.88,369.01 206.79,351.48 244.71,343.48 282.62,344.54 320.54,338.37 358.46,327.96 396.38,324.71 434.29,322.74 472.21,319.35 510.12,365.21 548.04,359.26 585.96,332.90 623.88,314.36 661.79,314.36 699.71,319.40 737.62,339.41 775.54,332.98 813.46,368.72 851.38,482.93 889.29,530.00 927.21,530.00 965.12,530.00 1003.04,530.00" fill="none" stroke="#dc2626" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="130.96,399.60 126.16,408.48 135.76,408.48" fill="#dc2626"/>
+<polygon points="168.88,364.21 164.07,373.09 173.68,373.09" fill="#dc2626"/>
+<polygon points="206.79,346.68 201.99,355.56 211.59,355.56" fill="#dc2626"/>
+<polygon points="244.71,338.68 239.91,347.56 249.51,347.56" fill="#dc2626"/>
+<polygon points="282.62,339.74 277.82,348.62 287.43,348.62" fill="#dc2626"/>
+<polygon points="320.54,333.57 315.74,342.45 325.34,342.45" fill="#dc2626"/>
+<polygon points="358.46,323.16 353.66,332.04 363.26,332.04" fill="#dc2626"/>
+<polygon points="396.38,319.91 391.57,328.79 401.18,328.79" fill="#dc2626"/>
+<polygon points="434.29,317.94 429.49,326.82 439.09,326.82" fill="#dc2626"/>
+<polygon points="472.21,314.55 467.41,323.43 477.01,323.43" fill="#dc2626"/>
+<polygon points="510.12,360.41 505.32,369.29 514.92,369.29" fill="#dc2626"/>
+<polygon points="548.04,354.46 543.24,363.34 552.84,363.34" fill="#dc2626"/>
+<polygon points="585.96,328.10 581.16,336.98 590.76,336.98" fill="#dc2626"/>
+<polygon points="623.88,309.56 619.08,318.44 628.67,318.44" fill="#dc2626"/>
+<polygon points="661.79,309.56 656.99,318.44 666.59,318.44" fill="#dc2626"/>
+<polygon points="699.71,314.60 694.91,323.48 704.51,323.48" fill="#dc2626"/>
+<polygon points="737.62,334.61 732.83,343.49 742.42,343.49" fill="#dc2626"/>
+<polygon points="775.54,328.18 770.74,337.06 780.34,337.06" fill="#dc2626"/>
+<polygon points="813.46,363.92 808.66,372.80 818.26,372.80" fill="#dc2626"/>
+<polygon points="851.38,478.13 846.58,487.01 856.17,487.01" fill="#dc2626"/>
+<polygon points="889.29,525.20 884.49,534.08 894.09,534.08" fill="#dc2626"/>
+<polygon points="927.21,525.20 922.41,534.08 932.01,534.08" fill="#dc2626"/>
+<polygon points="965.12,525.20 960.33,534.08 969.92,534.08" fill="#dc2626"/>
+<polygon points="1003.04,525.20 998.24,534.08 1007.84,534.08" fill="#dc2626"/>
+<polyline points="130.96,530.00 168.88,530.00 206.79,530.00 244.71,530.00 282.62,530.00 320.54,530.00 358.46,214.31 396.38,221.51 434.29,221.51 472.21,250.43 510.12,530.00 548.04,530.00 585.96,530.00 623.88,530.00 661.79,530.00 699.71,530.00 737.62,530.00 775.54,530.00 813.46,530.00 851.38,530.00 889.29,530.00 927.21,530.00 965.12,530.00 1003.04,530.00" fill="none" stroke="#ea580c" stroke-width="2.7" stroke-linejoin="round" stroke-linecap="round"/>
+<line x1="126.16" y1="525.20" x2="135.76" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="126.16" y1="534.80" x2="135.76" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="164.07" y1="525.20" x2="173.68" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="164.07" y1="534.80" x2="173.68" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="201.99" y1="525.20" x2="211.59" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="201.99" y1="534.80" x2="211.59" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="239.91" y1="525.20" x2="249.51" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="239.91" y1="534.80" x2="249.51" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="277.82" y1="525.20" x2="287.43" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="277.82" y1="534.80" x2="287.43" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="315.74" y1="525.20" x2="325.34" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="315.74" y1="534.80" x2="325.34" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="353.66" y1="209.51" x2="363.26" y2="219.11" stroke="#ea580c" stroke-width="2"/><line x1="353.66" y1="219.11" x2="363.26" y2="209.51" stroke="#ea580c" stroke-width="2"/>
+<line x1="391.57" y1="216.71" x2="401.18" y2="226.31" stroke="#ea580c" stroke-width="2"/><line x1="391.57" y1="226.31" x2="401.18" y2="216.71" stroke="#ea580c" stroke-width="2"/>
+<line x1="429.49" y1="216.71" x2="439.09" y2="226.31" stroke="#ea580c" stroke-width="2"/><line x1="429.49" y1="226.31" x2="439.09" y2="216.71" stroke="#ea580c" stroke-width="2"/>
+<line x1="467.41" y1="245.63" x2="477.01" y2="255.23" stroke="#ea580c" stroke-width="2"/><line x1="467.41" y1="255.23" x2="477.01" y2="245.63" stroke="#ea580c" stroke-width="2"/>
+<line x1="505.32" y1="525.20" x2="514.92" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="505.32" y1="534.80" x2="514.92" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="543.24" y1="525.20" x2="552.84" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="543.24" y1="534.80" x2="552.84" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="581.16" y1="525.20" x2="590.76" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="581.16" y1="534.80" x2="590.76" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="619.08" y1="525.20" x2="628.67" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="619.08" y1="534.80" x2="628.67" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="656.99" y1="525.20" x2="666.59" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="656.99" y1="534.80" x2="666.59" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="694.91" y1="525.20" x2="704.51" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="694.91" y1="534.80" x2="704.51" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="732.83" y1="525.20" x2="742.42" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="732.83" y1="534.80" x2="742.42" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="770.74" y1="525.20" x2="780.34" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="770.74" y1="534.80" x2="780.34" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="808.66" y1="525.20" x2="818.26" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="808.66" y1="534.80" x2="818.26" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="846.58" y1="525.20" x2="856.17" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="846.58" y1="534.80" x2="856.17" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="884.49" y1="525.20" x2="894.09" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="884.49" y1="534.80" x2="894.09" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="922.41" y1="525.20" x2="932.01" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="922.41" y1="534.80" x2="932.01" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="960.33" y1="525.20" x2="969.92" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="960.33" y1="534.80" x2="969.92" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="998.24" y1="525.20" x2="1007.84" y2="534.80" stroke="#ea580c" stroke-width="2"/><line x1="998.24" y1="534.80" x2="1007.84" y2="525.20" stroke="#ea580c" stroke-width="2"/>
+<line x1="675.00" y1="73.00" x2="703.00" y2="73.00" stroke="#2563eb" stroke-width="2.7" stroke-linecap="round" stroke-dasharray="6 4"/><circle cx="689.00" cy="73.00" r="4.80" fill="#2563eb"/><text x="713.00" y="77.00" font-size="12" fill="#18181b">Normal tx fee (baseline; estimated)</text>
+<line x1="675.00" y1="97.00" x2="703.00" y2="97.00" stroke="#dc2626" stroke-width="2.7" stroke-linecap="round"/><polygon points="689.00,92.20 684.20,101.08 693.80,101.08" fill="#dc2626"/><text x="713.00" y="101.00" font-size="12" fill="#18181b">Normal tx fee (attack run)</text>
+<line x1="675.00" y1="121.00" x2="703.00" y2="121.00" stroke="#ea580c" stroke-width="2.7" stroke-linecap="round"/><line x1="684.20" y1="116.20" x2="693.80" y2="125.80" stroke="#ea580c" stroke-width="2"/><line x1="684.20" y1="125.80" x2="693.80" y2="116.20" stroke="#ea580c" stroke-width="2"/><text x="713.00" y="125.00" font-size="12" fill="#18181b">Adversarial tx fee (attack run)</text>
+<text x="348.46" y="196.31" text-anchor="start" font-size="12" font-weight="700" fill="#ea580c">Attack fees across 4 blocks: 16.8365 ETH</text>
+<text x="112.00" y="612.00" text-anchor="start" font-size="13" font-weight="700" fill="#18181b">Baseline estimated total: 17.2060 ETH</text>
+<text x="450.00" y="612.00" text-anchor="start" font-size="13" font-weight="700" fill="#18181b">Attack-run normal total: 20.1357 ETH</text>
+<text x="800.00" y="612.00" text-anchor="start" font-size="13" font-weight="700" fill="#18181b">Adversarial total: 16.8365 ETH</text>
+<text x="112.00" y="641.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Baseline proxy: inferred pool departures x measured normal gas used x mean submitted gas price.</text>
+<text x="112.00" y="662.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Assumes no baseline drops; uncertain snapshot ticks (4, 5) are left blank. Baseline per-block fees are not measured.</text>
+<text x="112.00" y="688.00" text-anchor="start" font-size="12" font-weight="400" fill="#52525b">Unmatched reference: baseline 22 ticks / 9600 normal txs; attack 24 ticks / 11200 normal txs. Phase labels refer to attack.</text>
+</svg>

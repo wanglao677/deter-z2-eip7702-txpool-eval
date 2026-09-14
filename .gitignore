@@ -42,6 +42,11 @@ profile.cov
 # VS Code
 .vscode
 
+# local experiment secrets
+.env
+.env.*
+!.env.example
+
 tests/spec-tests/
 
 # binaries
@@ -57,3 +62,13 @@ cmd/geth/geth
 cmd/rlpdump/rlpdump
 cmd/workload/workload
 cmd/keeper/keeper
+
+# local Python env
+.venv-exp5/
+__pycache__/
+*.pyc
+
+# Deter-Z2 local experiment outputs
+devtools/mpfuzz_style_exp5_pos/scale_runs/
+devtools/mpfuzz_style_exp5_pos/key_prive_exp5.csv
+devtools/mpfuzz_style_exp5_pos/fee_data/

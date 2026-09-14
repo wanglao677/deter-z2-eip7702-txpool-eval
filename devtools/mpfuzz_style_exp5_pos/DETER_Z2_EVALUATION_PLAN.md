@@ -60,6 +60,49 @@ The comparison should show whether the attack changes:
 - how much gas/fee the attacker pays;
 - whether the attack is cheaper than a naive high-fee spam attack.
 
+### 2.3 Time-phased workload evaluation
+
+The one-shot scale experiment is useful for proving txpool displacement, but a
+paper-style evaluation should also measure the attack as a time series. The
+time-phased experiment keeps the normal workload schedule aligned between the
+baseline and attack runs, and introduces the attack workload only during the
+attack-on phase.
+
+Recommended phase structure:
+
+- **Warm-up:** normal transactions are submitted while the txpool is not full.
+- **Saturation:** normal transactions continue until the txpool reaches a high
+  pressure state.
+- **Control / attack-on:** the baseline keeps sending normal transactions only;
+  the attack run sends normal transactions and Deter-Z2 attack transactions.
+- **Recovery:** the attack workload stops while normal transactions continue,
+  measuring whether normal inclusion and txpool admission recover.
+- **Drain (optional):** all workload submission stops, measuring how long the
+  client takes to clear the txpool.
+
+This structure avoids comparing different normal workloads. The baseline is the
+counterfactual run without the attack node, not a different workload. A drain
+period can still be measured, but it should be treated as a separate recovery
+metric rather than the only baseline behavior.
+
+The phased script writes:
+
+```text
+timeseries.csv
+phase_markers.csv
+metrics.csv
+summary.json
+commands.md
+```
+
+`timeseries.csv` is the input for a figure similar to the prior-work locking
+attack plots. Each row records the current phase, observed block height,
+transactions submitted in that tick, cumulative submissions, per-block
+inclusions, and txpool totals. Optional txpool hash classification can be
+enabled for small runs with `--txpool-classification content`.
+`phase_markers.csv` records phase start/end blocks for plot annotations.
+`commands.md` records the exact reproduction command.
+
 ## 3. Attack Summary
 
 Deter-Z2 is an EIP-7702 variant of the latent-overdraft style txpool attack.
@@ -214,6 +257,54 @@ Important current observations:
 - Erigon did not require calldata padding in the successful run.
 - Small workloads, such as 1,000 normal plus 1,000 attack transactions, did not
   necessarily fill the default txpool enough to trigger full eviction.
+
+### RQ7: Time-phased service degradation and recovery
+
+When normal transactions are submitted continuously, does Deter-Z2 only evict a
+static set of already-pending transactions, or does it also degrade txpool
+service over time?
+
+Primary metrics:
+
+- normal transactions included per block;
+- attack transactions included per block;
+- txpool pending and queued counts per block;
+- normal transaction displacement during the attack-on phase;
+- number of blocks needed for normal inclusion to recover after the attack
+  workload stops;
+- number of blocks needed for the txpool to drain after all workload stops.
+
+Expected output:
+
+- a `timeseries.csv` file for every phased run;
+- a block-by-block figure showing the baseline curve and attacked curve;
+- vertical markers for warm-up, saturation, attack start, attack end, recovery,
+  and optional drain.
+
+### RQ8: Besu first-light cost optimization
+
+Can the Besu attack reduce on-chain cost by making the first transaction from
+each attack sender carry no payload or only a small payload, while later
+transactions from the same sender keep large calldata padding for txpool
+pressure?
+
+Primary metrics:
+
+- `normalDroppedAfterAttack`;
+- `normalReceipts`;
+- `attackSuccessfulReceipts`;
+- `attackSuccessfulReceiptsPerSender`;
+- `totalAttackGasUsed`;
+- `totalAttackCostWei`;
+- `avgCostPerEvictedNormalTx`.
+
+This variant tests whether we can separate the two roles of the attack
+transactions:
+
+- the first transaction from each attack sender executes on chain and should be
+  cheap;
+- later transactions mainly create txpool pressure and should ideally not be
+  paid on chain.
 
 ## 5. Experimental Setup
 
@@ -419,6 +510,99 @@ Expected result:
 - each attack sender has one successful on-chain transaction;
 - attack cost is much lower than a naive spam baseline.
 
+### Group C: Time-phased baseline run
+
+Purpose:
+
+- measure normal txpool service and block inclusion over time without the
+  attack workload;
+- provide the counterfactual curve for the attacked run;
+- avoid confusing natural multi-block inclusion delay with attack-induced
+  eviction.
+
+The normal workload schedule in this group must match Group D. The only
+difference is that the attack sender set is disabled.
+
+Recommended phase design:
+
+| Phase | Workload | Goal |
+| --- | --- | --- |
+| Warm-up | normal tx only | Observe normal admission before txpool saturation. |
+| Saturation | normal tx only | Bring the txpool to a high-pressure state. |
+| Control | normal tx only | Match the attack-on window without adversarial traffic. |
+| Recovery-control | normal tx only | Match the attack-off recovery window. |
+| Drain, optional | no workload | Measure natural txpool cleanup after all submissions stop. |
+
+During each phase, record one row per block in `timeseries.csv`.
+
+Important rule:
+
+```text
+Baseline normal schedule == Attack normal schedule
+```
+
+This rule makes the attack workload the only experimental variable.
+
+### Group D: Time-phased attack run
+
+Purpose:
+
+- measure how normal txpool service changes when Deter-Z2 starts during a
+  continuous normal workload;
+- measure whether normal inclusion recovers after the attack workload stops;
+- generate the block-by-block data needed for a figure similar to the
+  time-series plots in prior work.
+
+Recommended phase design:
+
+| Phase | Normal workload | Attack workload | Goal |
+| --- | --- | --- | --- |
+| Warm-up | on | off | Normal txpool admission before saturation. |
+| Saturation | on | off | Build normal txpool pressure before attack. |
+| Attack-on | on | on | Measure eviction and inclusion degradation. |
+| Recovery | on | off | Measure recovery after attack stops. |
+| Drain, optional | off | off | Measure how long the txpool takes to clear. |
+
+The attack should start only after the txpool has already reached the intended
+pre-attack pressure level. This makes the causal order clear:
+
+```text
+normal workload present -> attack workload starts -> normal txpool service changes
+```
+
+The attack run should preserve:
+
+- generated normal sender accounts;
+- generated attack sender accounts;
+- per-phase submission counts;
+- per-block txpool status;
+- per-block inclusion counts;
+- final receipts and cost metrics.
+
+### Group E: Besu first-light attack variant
+
+Purpose:
+
+- reduce Besu attack cost by lowering the calldata size of the first transaction
+  from each attack sender;
+- preserve txpool pressure by keeping larger calldata padding on later attack
+  transactions.
+
+Variants:
+
+| Variant | First attack tx padding | Later attack tx padding | Purpose |
+| --- | ---: | ---: | --- |
+| Current Besu attack | 8192 bytes | 8192 bytes | Existing successful baseline. |
+| First-light | 0 bytes | 8192 bytes | Lowest-cost candidate. |
+| First-small | 512 / 1024 / 2048 bytes | 8192 bytes | Fallback if zero-padding first tx is unstable. |
+
+Success criteria:
+
+- normal transactions are still displaced from the txpool;
+- normal receipts remain zero or near zero during the observation window;
+- each attack sender still has exactly one successful on-chain transaction;
+- total attack cost is lower than the current all-8192-byte attack.
+
 ## 8. Metrics
 
 Each run should output these metrics:
@@ -456,6 +640,40 @@ observationBlocks
 observationSeconds
 ```
 
+For phased runs, also output `timeseries.csv` with one row per observed block:
+
+```text
+blockNumber
+phase
+normalSubmittedThisTick
+attackSubmittedThisTick
+normalSubmittedTotal
+attackSubmittedTotal
+normalAcceptedTotal
+attackAcceptedTotal
+normalIncludedInObservedBlocks
+attackIncludedInObservedBlocks
+normalIncludedTotal
+attackIncludedTotal
+txpoolPendingAfterSend
+txpoolQueuedAfterSend
+txpoolPendingAfterBlock
+txpoolQueuedAfterBlock
+normalPending
+normalQueued
+normalDropped
+attackPending
+attackQueued
+attackDropped
+```
+
+The `normalPending`, `normalQueued`, `normalDropped`, `attackPending`,
+`attackQueued`, and `attackDropped` fields require hash-level txpool
+classification. This is expensive for large runs, so the script may leave them
+blank for formal runs and rely on aggregate txpool totals plus receipt data.
+Small smoke tests should enable hash-level classification to validate the
+measurement logic.
+
 Derived formulas:
 
 ```text
@@ -466,6 +684,23 @@ avgCostPerEvictedNormalTx = totalAttackCostWei / normalDroppedAfterAttack
 costRatio = totalAttackCostWei / baselineSpamCostWei
 ```
 
+For phased runs, additional derived metrics:
+
+```text
+normalIncludedPerBlock = normalIncludedInObservedBlocks
+attackIncludedPerBlock = attackIncludedInObservedBlocks
+normalBacklog = normalAcceptedTotal - normalIncludedTotal
+attackBacklog = attackAcceptedTotal - attackIncludedTotal
+recoveryBlocks = first block after attack end where normal inclusion returns to baseline range
+drainBlocks = first block after all workload stops where txpool pending and queued are both zero
+```
+
+For large phased runs, final receipt collection should default to included
+transactions observed in blocks rather than querying every accepted workload
+transaction. This keeps large runs from spending excessive time polling
+thousands of transactions that are still pending or were displaced. Full
+receipt polling can be enabled when needed for small debugging runs.
+
 ## 9. Required Artifacts
 
 For each client and each run, preserve:
@@ -474,6 +709,8 @@ For each client and each run, preserve:
 run.log
 summary.json
 metrics.csv
+timeseries.csv
+phase_markers.csv
 normal_accounts.jsonl
 attack_accounts.jsonl
 normal_records.jsonl
@@ -608,6 +845,42 @@ evaluation_summary.csv
 evaluation_summary.md
 ```
 
+### Step 6: Add time-phased evaluation
+
+Add or maintain a separate phased experiment script:
+
+```text
+mp_exp5_7702_phased_pos.py
+```
+
+This script should:
+
+- keep the normal workload schedule identical in baseline and attack runs;
+- enable attack transactions only during the attack-on phase;
+- sample txpool status once per block;
+- count normal and attack transactions included in each observed block;
+- write `timeseries.csv`, `metrics.csv`, and `summary.json`.
+
+The first validation should be a small smoke test before running any full-size
+experiment.
+
+### Step 7: Add Besu first-light attack variant
+
+Extend the attack sender transaction generator so that the first transaction
+from each delegated attack sender can use a different calldata padding size
+from later transactions.
+
+Recommended parameters:
+
+```text
+--attack-first-calldata-padding-bytes 0
+--attack-calldata-padding-bytes 8192
+```
+
+This variant should be evaluated against the current all-8192-byte Besu attack
+to determine whether the same eviction effect can be achieved with lower
+on-chain cost.
+
 ## 12. Recommended Next Command-Level Work
 
 The next concrete code task should be:
@@ -617,6 +890,16 @@ The next concrete code task should be:
 3. run one small baseline and one small attack test on Besu;
 4. repeat on Erigon;
 5. only after that, run full-size multi-trial experiments.
+
+After the one-shot evaluation is stable, run the phased workflow in this order:
+
+1. Besu phased baseline smoke;
+2. Besu phased attack smoke;
+3. Erigon phased baseline smoke;
+4. Erigon phased attack smoke;
+5. Besu phased formal trial;
+6. Erigon phased formal trial;
+7. Besu first-light cost-optimization trial.
 
 This order avoids wasting hours on large experiments before the output format is
 ready for analysis.
@@ -629,4 +912,3 @@ ready for analysis.
   Ethereum Mempool Security under Asymmetric DoS by Symbolized Stateful
   Fuzzing." USENIX Security 2024.
   https://www.usenix.org/conference/usenixsecurity24/presentation/wang-yibo
-

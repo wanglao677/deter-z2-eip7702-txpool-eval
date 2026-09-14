@@ -4,24 +4,28 @@
 
 This report presents a local evaluation of Deter-Z2, an EIP-7702-based
 transaction-pool eviction attack against Ethereum execution clients. We evaluate
-the attack on Besu and Erigon by comparing a benign baseline with an attacked
-configuration. In each experiment, 55 benign accounts submit 7,040 normal
-transactions. In the attacked configuration, 125 EIP-7702 delegated accounts
-attempt to submit 16,000 higher-priced attack transactions after the normal
-workload has entered the transaction pool.
+the attack on Besu and Erigon using controlled baseline and attack experiments.
+In each experiment, 55 benign accounts submit 7,040 normal transactions. In the
+attack configuration, 125 EIP-7702 delegated accounts subsequently attempt to
+submit 16,000 higher-priced attack transactions.
 
-In the first formal trial, both clients include all 7,040 normal transactions in
-the baseline. Under Deter-Z2, both clients evict all 7,040 normal transactions,
-and none of those transactions receive a receipt during the observation window.
-Only one attack transaction per delegated sender succeeds on chain, resulting in
-125 successful attack transactions on each client. These results demonstrate the
-asymmetry of Deter-Z2: a large adversarial transaction-pool footprint is created
-while only a small fraction of the attack transactions incurs an on-chain cost.
+In the first formal trial, both Besu and Erigon admit the complete benign
+workload, and all 7,040 normal transactions are eventually included in the
+corresponding baseline experiments. Under Deter-Z2, all 7,040 previously
+admitted normal transactions disappear from the victim transaction pool, and none
+receive a receipt within the measured attack observation window. Meanwhile, only
+125 attack transactions successfully execute on chain, exactly one per delegated
+attack sender, while 15,660 attack transactions remain in Besu's transaction
+pool and 15,875 remain in Erigon's.
 
-The results in this report are from one complete formal trial per client and
-mode. They establish attack feasibility and provide the first quantitative
-comparison, but repeated trials are still required before making a statistical
-stability claim.
+These results demonstrate a strong execution asymmetry: a small number of
+successful on-chain attack executions supports a substantially larger
+adversarial transaction-pool footprint. The measured pool-to-successful-execution
+ratios are approximately 125.3x for Besu and 127.0x for Erigon. The results
+establish the feasibility of Deter-Z2 against both clients under the tested local
+configurations. Repeated trials and parameter-sensitivity experiments are still
+required to evaluate stability and identify the minimum successful attack
+configurations.
 
 ## 1. Evaluation Goals
 
@@ -33,9 +37,10 @@ The evaluation addresses the following research questions:
   from blocks during the observation window?
 - **RQ3 - Execution asymmetry:** How many attack transactions actually succeed
   on chain compared with the number used to create transaction-pool pressure?
-- **RQ4 - Attack cost:** What on-chain gas cost is paid by the attack workload?
+- **RQ4 - Attack workload execution cost:** What on-chain gas cost is paid by
+  the mined attack-workload transactions?
 - **RQ5 - Cross-client behavior:** How do Besu and Erigon differ in transaction
-  admission, eviction, and attack cost?
+  admission, eviction, and execution behavior?
 
 ## 2. Experimental Setup
 
@@ -85,8 +90,8 @@ used to control transaction-pool ordering in the local experiment. Consequently,
 the ETH-denominated costs reported below are comparative local-workload costs,
 not estimates of the cost of attacking Ethereum mainnet.
 
-Besu and Erigon use different transaction payloads because the successful attack
-targets different limiting resources:
+Besu and Erigon use different transaction payloads because the current
+client-specific successful configurations target different limiting resources:
 
 | Client | Normal calldata | Attack padding | Normal gas limit | Primary pressure |
 | --- | ---: | ---: | ---: | --- |
@@ -134,26 +139,35 @@ locations, receipts, gas use, and transaction cost. The main metrics are:
 ```text
 evictionRate = normalMissingAtTxpoolCheck / normalSubmitted
 normalInclusionRate = normalSuccessfulReceipts / normalSubmitted
-attackCostWei = sum(gasUsed * effectiveGasPrice)
-costPerSuccessfulSender = attackCostWei / attackSuccessfulSenders
-costPerEvictedNormalTx = attackCostWei / normalMissingAtTxpoolCheck
+attackIncludedReceipts = attackSuccessfulReceipts + attackFailedReceipts
+attackWorkloadExecutionCostWei =
+    sum(gasUsed * effectiveGasPrice) for all mined attack-workload transactions
+costPerSuccessfulSender =
+    attackWorkloadExecutionCostWei / attackSuccessfulSenders
+costPerEvictedNormalTx =
+    attackWorkloadExecutionCostWei / normalMissingAtTxpoolCheck
+poolAmplification =
+    attack transactions remaining in the pool / attackSuccessfulReceipts
 ```
 
 `normalMissingAtTxpoolCheck` counts normal transactions that were accepted before
 the attack but could no longer be found in either the pending or queued subpool
-after the attack. The report calls these transactions *evicted*. A zero receipt
-count means that the transactions were not included during this experiment's
+after the attack. The report calls these transactions *evicted* only in the
+following sense: they were accepted before the attack, absent from pending and
+queued after the attack, and not included before the post-attack snapshot. This
+definition separates eviction from ordinary block inclusion. A zero receipt count
+means that the transactions were not included during this experiment's
 observation window; it does not imply that a user or peer could never rebroadcast
 them later.
 
 ## 4. Main Results
 
-| Client | Mode | Normal submitted | Normal included | Normal evicted | Eviction rate | Attack attempted | Attack accepted | Attack successful | Attack errored | Attack cost (ETH) |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| Besu | Baseline | 7,040 | 7,040 | 0 | N/A | 0 | 0 | 0 | 0 | 0.0000 |
-| Besu | Attack | 7,040 | 0 | 7,040 | 100% | 16,000 | 16,000 | 125 | 0 | 52.0000 |
-| Erigon | Baseline | 7,040 | 7,040 | 0 | N/A | 0 | 0 | 0 | 0 | 0.0000 |
-| Erigon | Attack | 7,040 | 0 | 7,040 | 100% | 16,000 | 15,875 | 125 | 125 | 16.8365 |
+| Client | Mode | Normal submitted | Normal included | Normal evicted | Eviction rate | Attack attempted | Attack accepted | Attack included | Attack successful | Attack failed | Pool amplification | Attack workload execution cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Besu | Baseline | 7,040 | 7,040 | 0 | N/A | 0 | 0 | 0 | 0 | 0 | N/A | 0.0000 ETH |
+| Besu | Attack | 7,040 | 0 | 7,040 | 100% | 16,000 | 16,000 | 125 | 125 | 0 | 125.28x | 52.0000 ETH |
+| Erigon | Baseline | 7,040 | 7,040 | 0 | N/A | 0 | 0 | 0 | 0 | 0 | N/A | 0.0000 ETH |
+| Erigon | Attack | 7,040 | 0 | 7,040 | 100% | 16,000 | 15,875 | 125 | 125 | 0 | 127.00x | 16.8365 ETH |
 
 The baseline establishes that the normal workload is valid and can be processed
 by both clients in the absence of an attack. Therefore, the disappearance and
@@ -164,6 +178,12 @@ Under Deter-Z2, the eviction rate is 100% for both clients. All 7,040 normal
 transactions are missing from the transaction pool after attack submission, and
 no normal transaction receives a receipt during the observation window. This
 answers RQ1 and RQ2 affirmatively for the tested configurations.
+
+The inclusion comparison should be read with the observation-window limitation
+discussed in Section 9.2. The current baseline runs use client-appropriate full
+windows to show that the benign workload can eventually complete, while the
+attack runs check the immediate post-attack window. Future trials should also
+record a common short inclusion window for both baseline and attack runs.
 
 ## 5. Client-Specific Results
 
@@ -189,8 +209,10 @@ each of the 125 attack senders. The remaining attack transactions create pool
 pressure without successful on-chain execution during the observation window.
 
 The successful Besu configuration uses 8,192 bytes of calldata in both normal
-and attack transactions. This indicates that data-size pressure is important for
-reaching the default Besu transaction-pool capacity with this workload.
+and attack transactions. This suggests that data-size pressure may be relevant
+for reaching the default Besu transaction-pool capacity with this workload. A
+parameter-sensitivity experiment is still needed before making a stronger claim
+about the minimum required calldata size.
 
 ### 5.2 Erigon
 
@@ -208,26 +230,27 @@ attack errored:     125
 ```
 
 Erigon accepts 15,875 of the 16,000 attack transactions. The other 125
-submissions return `pending sub-pool is full`. The 10,000 pending attack
-transactions match Erigon's observed default pending-subpool limit. The 5,875
+submissions return `pending sub-pool is full`. The experiment observes
+saturation at 10,000 pending attack transactions. The 5,875
 queued transactions are the remainder admitted from this workload, not evidence
 that 5,875 is Erigon's maximum queued capacity.
 
 As with Besu, exactly one transaction per attack sender succeeds, for a total of
 125 successful attack receipts. All normal transactions are evicted and none are
-included during the observation window. Unlike the Besu configuration, Erigon
-does not require calldata padding because transaction-count pressure is sufficient
-to fill the pending subpool.
+included during the observation window. In the tested Erigon configuration,
+transaction-count pressure is sufficient to fill the pending subpool without
+calldata padding. This does not rule out calldata effects under other Erigon
+configurations.
 
 ## 6. Execution Asymmetry
 
 The key Deter-Z2 result is the difference between transaction-pool occupancy and
 on-chain execution:
 
-| Client | Attack attempted | Present after attack | Successful on chain | Success/attempt ratio |
-| --- | ---: | ---: | ---: | ---: |
-| Besu | 16,000 | 15,660 | 125 | 0.78125% |
-| Erigon | 16,000 | 15,875 | 125 | 0.78125% |
+| Client | Attack attempted | Present after attack | Successful on chain | Success/attempt ratio | Pool amplification |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Besu | 16,000 | 15,660 | 125 | 0.78125% | 125.28x |
+| Erigon | 16,000 | 15,875 | 125 | 0.78125% | 127.00x |
 
 Although thousands of attack transactions occupy transaction-pool capacity,
 only 0.78125% of the attempted transactions succeed on chain. In both clients,
@@ -235,20 +258,34 @@ the successful-receipt distribution is `{1: 125}`, meaning that every one of the
 125 delegated senders has exactly one successful transaction. This matches the
 intended drain behavior and answers RQ3.
 
+The more important asymmetry is the pool-resident footprint per successful
+on-chain attack execution. In this trial, every successful attack transaction
+supports approximately 125 to 127 attack transactions that remain in the victim
+transaction pool. This makes Deter-Z2 different from ordinary executable spam:
+the attacker pays sustained execution cost for only one transaction per delegated
+sender while many later transactions from the same senders continue to consume
+transaction-pool capacity.
+
 ## 7. Cost Analysis
 
-The measured cost includes the gas cost of successful attack-workload
-transactions:
+The measured cost below is the attack workload execution cost: the gas cost of
+mined attack-workload transactions. In this trial, all mined attack-workload
+transactions were successful, so `attackIncludedReceipts`,
+`attackSuccessfulReceipts`, and the cost-bearing attack receipts are all 125 for
+each client.
 
-| Client | Successful attack senders | Attack gas used | Attack cost | Cost per successful sender | Cost per evicted normal tx |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Besu | 125 | 13,000,000 | 52.0000 ETH | 0.4160 ETH | 0.007386 ETH |
-| Erigon | 125 | 4,209,125 | 16.8365 ETH | 0.134692 ETH | 0.002392 ETH |
+| Client | Attack included | Attack successful | Attack failed | Attack gas used | Attack workload execution cost | Cost per successful sender | Cost per evicted normal tx |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Besu | 125 | 125 | 0 | 13,000,000 | 52.0000 ETH | 0.4160 ETH | 0.007386 ETH |
+| Erigon | 125 | 125 | 0 | 4,209,125 | 16.8365 ETH | 0.134692 ETH | 0.002392 ETH |
 
-Erigon's measured attack-workload cost is approximately 67.6% lower than Besu's
-in this local configuration. This difference primarily follows from the lower
-gas used by the successful Erigon attack transactions and the absence of large
-calldata in the Erigon workload.
+Under the client-specific successful attack configurations, Erigon's measured
+attack workload execution cost is approximately 67.6% lower than Besu's. This
+difference primarily follows from the lower gas used by the successful Erigon
+attack transactions and the absence of large calldata in the Erigon workload.
+It should not yet be interpreted as a controlled cross-client cost comparison,
+because the successful Besu and Erigon workloads intentionally pressure
+different transaction-pool resources.
 
 These values require two qualifications. First, the local gas-price unit is
 synthetic, so the ETH amounts should be used for comparison between these runs,
@@ -268,6 +305,7 @@ The formal trial supports four findings:
    while the attacked runs include none during the observation window.
 3. **The attack has asymmetric execution cost.** Thousands of attack transactions
    create pool pressure, but only one transaction per delegated sender succeeds.
+   The measured pool amplification is 125.28x on Besu and 127.00x on Erigon.
 4. **The limiting resource is client dependent.** Besu is pressured through large
    transaction payloads, whereas Erigon reaches its pending-subpool transaction
    limit without calldata padding.
@@ -304,10 +342,12 @@ base fees and priority fees.
 
 ### 9.4 Setup cost excluded
 
-The current attack cost covers successful workload transactions only. Deployment,
-funding, and set-code transaction costs are not included. Those costs should be
-measured separately because some setup actions may be reusable across attack
-rounds.
+The current attack workload execution cost covers mined attack-workload
+transactions only. In this trial, all mined attack-workload transactions were
+successful, so this is numerically equal to the cost of successful workload
+transactions. Deployment, funding, and set-code transaction costs are not
+included. Those costs should be measured separately because some setup actions
+may be reusable across attack rounds.
 
 ### 9.5 Default local topology
 
@@ -351,12 +391,15 @@ only one attack transaction per delegated sender succeeds on chain.
 
 The next evaluation work should proceed in this order:
 
-1. Repeat the four experiment groups on fresh enclaves for at least three trials.
-2. Aggregate mean, standard deviation, and success rate for eviction, inclusion,
-   and attack cost.
-3. Measure setup cost and add a naive executable-spam cost baseline.
-4. Vary attack senders, transactions per sender, and calldata size to identify
+1. Add a common short observation-window metric so that baseline and attack
+   inclusion can be compared over the same number of blocks.
+2. Keep reporting attack included, successful, and failed receipts separately in
+   future runs.
+3. Repeat the four experiment groups on fresh enclaves for at least three trials.
+4. Aggregate mean, standard deviation, and success rate for eviction, inclusion,
+   pool amplification, and attack workload execution cost.
+5. Measure setup cost and add a naive executable-spam cost baseline.
+6. Vary attack senders, transactions per sender, and calldata size to identify
    each client's minimum successful attack configuration.
-5. Add a multi-node experiment to study whether peer rebroadcast changes the
+7. Add a multi-node experiment to study whether peer rebroadcast changes the
    duration of the denial-of-service effect.
-

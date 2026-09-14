@@ -12,10 +12,11 @@ import argparse
 import csv
 import json
 import math
+import random
 import subprocess
 import sys
 import time
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ import mp_exp5_7702_pos as exp7702
 
 
 ETHER = 10**18
+GWEI = 10**9
 
 
 def parse_args():
@@ -39,12 +41,24 @@ def parse_args():
     parser.add_argument("--attack-senders", type=int, default=1750)
     parser.add_argument("--attack-txs-per-sender", type=int, default=4)
     parser.add_argument("--attack-calldata-padding-bytes", type=int, default=0, help="Zero-byte padding appended after drainAll(address) calldata.")
+    parser.add_argument("--attack-first-calldata-padding-bytes", type=int, default=-1, help="Optional zero-byte padding for the first attack transaction from each attack sender. Default -1 uses --attack-calldata-padding-bytes for every attack transaction.")
     parser.add_argument("--seed", default="exp5-7702-scale")
+    parser.add_argument("--workload-seed", default=None, help="Seed for paired randomized normal workloads. Defaults to --seed.")
     parser.add_argument("--trial-id", default="", help="Optional trial label included in output paths and metrics.csv.")
     parser.add_argument("--price-unit", type=int, default=None)
     parser.add_argument("--setup-price", type=int, default=10)
     parser.add_argument("--normal-price", type=int, default=3)
     parser.add_argument("--attacker-price", type=int, default=7)
+    parser.add_argument("--normal-gas-price-mode", choices=["fixed", "sampled"], default="fixed", help="fixed uses normal-price * price-unit; sampled draws each normal tx gas price from a mainnet fee_history.csv column.")
+    parser.add_argument("--normal-fee-history", default=None, help="Path to fee_history.csv produced by collect_mainnet_fee_history.py. Providing this also enables sampled mode.")
+    parser.add_argument("--normal-fee-field", default="effectiveP50Gwei", help="fee_history.csv column to sample for normal tx gas prices.")
+    parser.add_argument("--normal-fee-jitter", type=float, default=0.10, help="Symmetric random jitter applied to each sampled normal gas price, e.g. 0.10 means +/-10%%.")
+    parser.add_argument("--normal-fee-multiplier", type=float, default=1.0, help="Multiplier applied after sampling the mainnet fee value.")
+    parser.add_argument("--normal-fee-sampling-strategy", choices=["per-tx", "per-sender", "sender-monotonic"], default="per-tx", help="How sampled normal gas prices are assigned. per-tx preserves the original independent sampling; per-sender reuses one sampled price per sender; sender-monotonic samples per transaction but never decreases for the same sender nonce stream.")
+    parser.add_argument("--normal-fee-floor-wei", type=int, default=0, help="Optional minimum sampled normal gas price in wei.")
+    parser.add_argument("--normal-fee-floor-gwei", default=None, help="Optional minimum sampled normal gas price in gwei.")
+    parser.add_argument("--normal-fee-cap-wei", type=int, default=0, help="Optional maximum sampled normal gas price in wei. Default 0 disables the cap.")
+    parser.add_argument("--normal-fee-cap-gwei", default=None, help="Optional maximum sampled normal gas price in gwei.")
     parser.add_argument("--attack-balance-eth", type=int, default=10)
     parser.add_argument("--attack-gas-cap-eth", type=int, default=2)
     parser.add_argument("--normal-fund-eth", type=float, default=0.1)
@@ -56,6 +70,7 @@ def parse_args():
     parser.add_argument("--setup-wait", type=int, default=240)
     parser.add_argument("--receipt-timeout", type=int, default=240)
     parser.add_argument("--fresh-block-timeout", type=int, default=90)
+    parser.add_argument("--common-window-blocks", type=int, default=1, help="Common short receipt-observation window used for baseline-vs-attack comparison.")
     parser.add_argument("--post-attack-blocks", type=int, default=4)
     parser.add_argument("--solc-version", default="0.8.20")
     parser.add_argument("--evm-version", default="london")
@@ -106,12 +121,192 @@ def chunked(items, size):
         yield start, items[start : start + size]
 
 
+def uses_sampled_normal_gas_price(args):
+    if args.normal_fee_history and args.normal_gas_price_mode == "fixed":
+        args.normal_gas_price_mode = "sampled"
+    return args.normal_gas_price_mode == "sampled"
+
+
+def parse_fee_value_to_wei(raw, field):
+    if raw is None or str(raw).strip() == "":
+        return None
+    value = str(raw).strip()
+    normalized_field = field.lower()
+    if normalized_field.endswith("wei") and not normalized_field.endswith("gwei"):
+        wei = int(value, 0)
+    else:
+        wei = int((Decimal(value) * Decimal(GWEI)).to_integral_value(rounding=ROUND_HALF_UP))
+    return wei if wei > 0 else None
+
+
+def load_normal_fee_values_wei(args):
+    cached = getattr(args, "_normal_fee_values_wei", None)
+    if cached is not None:
+        return cached
+    if not args.normal_fee_history:
+        raise RuntimeError("--normal-fee-history is required when normal gas price mode is sampled")
+
+    path = Path(args.normal_fee_history)
+    if not path.exists():
+        raise RuntimeError(f"normal fee history file not found: {path}")
+
+    values = []
+    with path.open(newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        if args.normal_fee_field not in (reader.fieldnames or []):
+            raise RuntimeError(f"column {args.normal_fee_field!r} not found in {path}")
+        for row in reader:
+            wei = parse_fee_value_to_wei(row.get(args.normal_fee_field), args.normal_fee_field)
+            if wei is not None:
+                values.append(wei)
+
+    if not values:
+        raise RuntimeError(f"no positive values found in {path} column {args.normal_fee_field}")
+    args._normal_fee_values_wei = values
+    return values
+
+
+def normal_gas_price_upper_bound_wei(args):
+    if not uses_sampled_normal_gas_price(args):
+        return args.normal_price * args.price_unit
+    if args.normal_fee_jitter < 0:
+        raise RuntimeError("--normal-fee-jitter must be non-negative")
+    if args.normal_fee_multiplier <= 0:
+        raise RuntimeError("--normal-fee-multiplier must be positive")
+    values = load_normal_fee_values_wei(args)
+    floor = normal_fee_floor_wei(args)
+    cap = normal_fee_cap_wei(args)
+    if cap and cap < floor:
+        raise RuntimeError("normal-fee-cap must be greater than or equal to normal-fee-floor")
+    upper = max(floor, 1, int(max(values) * args.normal_fee_multiplier * (1 + args.normal_fee_jitter)))
+    return min(upper, cap) if cap else upper
+
+
+def normal_fee_floor_wei(args):
+    floor = args.normal_fee_floor_wei
+    if floor < 0:
+        raise RuntimeError("--normal-fee-floor-wei must be non-negative")
+    if args.normal_fee_floor_gwei not in (None, ""):
+        gwei_floor = int((Decimal(str(args.normal_fee_floor_gwei)) * Decimal(GWEI)).to_integral_value(rounding=ROUND_HALF_UP))
+        floor = max(floor, gwei_floor)
+    return floor
+
+
+def normal_fee_cap_wei(args):
+    cap = args.normal_fee_cap_wei
+    if cap < 0:
+        raise RuntimeError("--normal-fee-cap-wei must be non-negative")
+    if args.normal_fee_cap_gwei not in (None, ""):
+        gwei_cap = int((Decimal(str(args.normal_fee_cap_gwei)) * Decimal(GWEI)).to_integral_value(rounding=ROUND_HALF_UP))
+        cap = min(cap, gwei_cap) if cap else gwei_cap
+    return cap
+
+
+def gas_price_stats(prices):
+    if not prices:
+        return {}
+    ordered = sorted(int(price) for price in prices)
+    return {
+        "count": len(ordered),
+        "minWei": ordered[0],
+        "medianWei": ordered[len(ordered) // 2],
+        "avgWei": int(sum(ordered) / len(ordered)),
+        "maxWei": ordered[-1],
+    }
+
+
+class NormalGasPriceSampler:
+    def __init__(self, args, seed):
+        self.values = load_normal_fee_values_wei(args)
+        self.jitter = args.normal_fee_jitter
+        self.multiplier = args.normal_fee_multiplier
+        self.floor_wei = normal_fee_floor_wei(args)
+        self.cap_wei = normal_fee_cap_wei(args)
+        self.strategy = getattr(args, "normal_fee_sampling_strategy", "per-tx")
+        self.rng = random.Random(seed)
+        self.generated = []
+        self.sender_prices = {}
+        self.sender_last_prices = {}
+
+    def sample_one(self):
+        sampled = self.rng.choice(self.values)
+        factor = self.multiplier
+        if self.jitter:
+            factor *= 1 + self.rng.uniform(-self.jitter, self.jitter)
+        price = max(self.floor_wei, 1, int(round(sampled * factor)))
+        if self.cap_wei:
+            price = min(price, self.cap_wei)
+        return price
+
+    def sender_key(self, account):
+        return account.get("label") or account.get("address") or account.get("private_key")
+
+    def price_for_sender(self, account):
+        key = self.sender_key(account)
+        if self.strategy == "per-sender":
+            if key not in self.sender_prices:
+                self.sender_prices[key] = self.sample_one()
+            return self.sender_prices[key]
+        if self.strategy == "sender-monotonic":
+            price = self.sample_one()
+            previous = self.sender_last_prices.get(key)
+            if previous is not None:
+                price = max(previous, price)
+            self.sender_last_prices[key] = price
+            return price
+        return self.sample_one()
+
+    def ordered_accounts_for_prices(self, accounts, txs_per_sender, send_order):
+        if send_order == "round-robin":
+            for _ in range(txs_per_sender):
+                for account in accounts:
+                    yield account
+        else:
+            for account in accounts:
+                for _ in range(txs_per_sender):
+                    yield account
+
+    def take(self, count, accounts=None, txs_per_sender=1, send_order="account"):
+        prices = []
+        expected = len(accounts) * txs_per_sender if accounts is not None else None
+        if self.strategy == "per-tx" or accounts is None or expected != count:
+            prices = [self.sample_one() for _ in range(count)]
+        else:
+            for account in self.ordered_accounts_for_prices(accounts, txs_per_sender, send_order):
+                prices.append(self.price_for_sender(account))
+        self.generated.extend(prices)
+        return prices
+
+    def source_stats(self):
+        return gas_price_stats(self.values)
+
+    def generated_stats(self):
+        return gas_price_stats(self.generated)
+
+
+def build_normal_gas_price_sampler(args):
+    if not uses_sampled_normal_gas_price(args):
+        return None
+    workload_seed = getattr(args, "workload_seed", None) or args.seed
+    seed = f"{workload_seed}:{args.client}:normal-fee-sampler"
+    return NormalGasPriceSampler(args, seed)
+
+
+def write_gas_price_list(path, prices):
+    path.write_text("\n".join(str(price) for price in prices) + "\n", encoding="utf-8")
+
+
+def extra_option_value(extra, option, default):
+    for index, value in enumerate(extra):
+        if value == option and index + 1 < len(extra):
+            return extra[index + 1]
+    return default
+
+
 def run_helper(repo_root, args, mode, accounts_path, extra):
     helper = "./devtools/mpfuzz_style_exp5_pos/eip7702_scale_helper.go"
-    cmd = [
-        args.go_binary,
-        "run",
-        helper,
+    prefix = [args.helper_binary] if getattr(args, "helper_binary", None) else [args.go_binary, "run", helper]
+    cmd = prefix + [
         "--mode",
         mode,
         "--rpc",
@@ -123,13 +318,24 @@ def run_helper(repo_root, args, mode, accounts_path, extra):
     return read_json_records(output)
 
 
-def run_helper_in_batches(repo_root, args, mode, accounts, out_dir, extra):
+def run_helper_in_batches(repo_root, args, mode, accounts, out_dir, extra, gas_price_sampler=None, txs_per_sender=1):
     all_records = []
     for batch_index, batch in chunked(accounts, args.batch_size):
         batch_path = out_dir / f"{mode}_{batch_index:05d}.jsonl"
         write_jsonl(batch_path, batch)
         print(f"{mode}: batchStart={batch_index} batchSize={len(batch)}")
-        records = run_helper(repo_root, args, mode, batch_path, extra)
+        call_extra = list(extra)
+        if gas_price_sampler is not None:
+            gas_prices = gas_price_sampler.take(
+                len(batch) * txs_per_sender,
+                accounts=batch,
+                txs_per_sender=txs_per_sender,
+                send_order=extra_option_value(call_extra, "--send-order", "account"),
+            )
+            gas_prices_path = out_dir / f"{mode}_{batch_index:05d}_gas_prices.txt"
+            write_gas_price_list(gas_prices_path, gas_prices)
+            call_extra += ["--gas-price-wei-list", str(gas_prices_path)]
+        records = run_helper(repo_root, args, mode, batch_path, call_extra)
         errors = [record for record in records if record.get("error")]
         if errors:
             print(f"warning: {mode} batchStart={batch_index} errors={len(errors)} first={errors[0]}")
@@ -137,9 +343,9 @@ def run_helper_in_batches(repo_root, args, mode, accounts, out_dir, extra):
     return all_records
 
 
-def wait_blocks(rpc, count, timeout):
-    start = base.hex_to_int(rpc.call("eth_blockNumber"))
-    target = start + count
+def wait_until_block(rpc, target, timeout, start=None):
+    if start is None:
+        start = base.hex_to_int(rpc.call("eth_blockNumber"))
     deadline = time.time() + timeout
     print(f"waiting for block >= {target} from {start}")
     while time.time() < deadline:
@@ -148,7 +354,12 @@ def wait_blocks(rpc, count, timeout):
             print(f"currentBlock={current}")
             return current
         time.sleep(1)
-    raise RuntimeError(f"timed out waiting for {count} blocks")
+    raise RuntimeError(f"timed out waiting for block {target}")
+
+
+def wait_blocks(rpc, count, timeout):
+    start = base.hex_to_int(rpc.call("eth_blockNumber"))
+    return wait_until_block(rpc, start + count, timeout, start=start)
 
 
 def txpool_hashes(rpc):
@@ -190,6 +401,14 @@ def receipt_cost_summary(receipts):
     return gas_used_total, cost_wei_total
 
 
+def receipts_up_to_block(receipts, block_number):
+    return {
+        tx_hash: receipt
+        for tx_hash, receipt in receipts.items()
+        if hex_quantity_to_int(receipt.get("blockNumber")) <= block_number
+    }
+
+
 def wei_to_eth(value):
     if value in (None, ""):
         return ""
@@ -222,6 +441,13 @@ def write_metrics_csv(path, metrics):
         "trialId",
         "rpc",
         "outDir",
+        "executionWindowStartBlock",
+        "commonWindowBlocks",
+        "commonWindowTargetBlock",
+        "commonWindowObservedBlock",
+        "fullWindowBlocks",
+        "fullWindowTargetBlock",
+        "fullWindowObservedBlock",
         "normalSubmitted",
         "normalAccepted",
         "normalRejected",
@@ -234,6 +460,22 @@ def write_metrics_csv(path, metrics):
         "normalPendingFinal",
         "normalQueuedFinal",
         "normalMissingFromTxpoolFinal",
+        "normalReceiptsCommonWindow",
+        "normalSuccessfulReceiptsCommonWindow",
+        "normalFailedReceiptsCommonWindow",
+        "normalGasUsedCommonWindow",
+        "normalCostWeiCommonWindow",
+        "normalCostEthCommonWindow",
+        "normalInclusionRateCommonWindow",
+        "normalSuccessfulInclusionRateCommonWindow",
+        "normalReceiptsFullWindow",
+        "normalSuccessfulReceiptsFullWindow",
+        "normalFailedReceiptsFullWindow",
+        "normalGasUsedFullWindow",
+        "normalCostWeiFullWindow",
+        "normalCostEthFullWindow",
+        "normalInclusionRateFullWindow",
+        "normalSuccessfulInclusionRateFullWindow",
         "normalReceipts",
         "normalSuccessfulReceipts",
         "normalFailedReceipts",
@@ -253,7 +495,9 @@ def write_metrics_csv(path, metrics):
         "attackPendingFinal",
         "attackQueuedFinal",
         "attackDroppedFinal",
+        "attackPresentAfterAttack",
         "attackReceipts",
+        "attackIncludedReceipts",
         "attackSuccessfulReceipts",
         "attackFailedReceipts",
         "attackSuccessfulReceiptsPerSender",
@@ -261,16 +505,32 @@ def write_metrics_csv(path, metrics):
         "attackGasUsedOnChain",
         "attackCostWei",
         "attackCostEth",
+        "attackWorkloadExecutionCostWei",
+        "attackWorkloadExecutionCostEth",
         "attackCostPerSuccessfulSenderWei",
         "attackCostPerEvictedNormalWei",
+        "poolAmplification",
         "priceUnitWei",
         "setupPrice",
         "normalPrice",
         "attackerPrice",
+        "normalGasPriceMode",
+        "normalFeeHistory",
+        "normalFeeField",
+        "normalFeeJitter",
+        "normalFeeMultiplier",
+        "normalFeeSamplingStrategy",
+        "normalFeeFloorWei",
+        "normalFeeCapWei",
+        "normalGasPriceMinWei",
+        "normalGasPriceMedianWei",
+        "normalGasPriceAvgWei",
+        "normalGasPriceMaxWei",
         "normalGas",
         "attackGas",
         "normalCalldataBytes",
         "attackCalldataPaddingBytes",
+        "attackFirstCalldataPaddingBytes",
         "normalSenders",
         "normalTxsPerSender",
         "attackSenders",
@@ -393,8 +653,14 @@ def main():
         raise RuntimeError("normal counts must be positive")
     if is_attack_mode and (args.attack_senders <= 0 or args.attack_txs_per_sender <= 0):
         raise RuntimeError("attack counts must be positive")
+    if args.common_window_blocks <= 0 or args.post_attack_blocks <= 0:
+        raise RuntimeError("common-window-blocks and post-attack-blocks must be positive")
+    if args.common_window_blocks > args.post_attack_blocks:
+        raise RuntimeError("common-window-blocks must be <= post-attack-blocks")
     if args.normal_calldata_bytes < 0 or args.attack_calldata_padding_bytes < 0:
         raise RuntimeError("calldata byte counts must be non-negative")
+    if args.attack_first_calldata_padding_bytes < -1:
+        raise RuntimeError("attack-first-calldata-padding-bytes must be -1 or non-negative")
     min_normal_gas = 21_000 + args.normal_calldata_bytes * 4
     if args.normal_gas < min_normal_gas:
         raise RuntimeError(f"normal-gas is too low for {args.normal_calldata_bytes} zero calldata bytes: need at least {min_normal_gas}")
@@ -413,7 +679,8 @@ def main():
 
     if args.price_unit is None:
         args.price_unit = (args.attack_gas_cap_eth * ETHER) // (args.attacker_price * args.attack_gas)
-    normal_required_wei = args.normal_txs_per_sender * (args.normal_price * args.price_unit * args.normal_gas + 1)
+    normal_required_gas_price = normal_gas_price_upper_bound_wei(args)
+    normal_required_wei = args.normal_txs_per_sender * (normal_required_gas_price * args.normal_gas + 1)
     normal_fund_wei_arg = int(args.normal_fund_eth * ETHER)
     if normal_fund_wei_arg < normal_required_wei:
         raise RuntimeError(f"normal-fund-eth is too low for {args.normal_txs_per_sender} normal txs per sender: need at least {normal_required_wei} wei")
@@ -422,6 +689,8 @@ def main():
         attack_fund_wei_arg = args.attack_balance_eth * ETHER
         if attack_fund_wei_arg < attack_required_wei:
             raise RuntimeError(f"attack-balance-eth is too low for {args.attack_txs_per_sender} attack txs per sender: need at least {attack_required_wei} wei")
+
+    normal_gas_price_sampler = build_normal_gas_price_sampler(args)
 
     args.rpc_url = args.rpc or base.discover_kurtosis_rpc(args.enclave)
 
@@ -454,7 +723,20 @@ def main():
     print(f'normalCount={args.normal_count}')
     print(f'normalSenders={len(normal_accounts)} normalTxsPerSender={args.normal_txs_per_sender}')
     print(f"attackSenders={len(attack_accounts)} attackTxsPerSender={args.attack_txs_per_sender}")
+    if is_attack_mode and args.attack_first_calldata_padding_bytes >= 0:
+        print(f"attackFirstCalldataPaddingBytes={args.attack_first_calldata_padding_bytes}")
+    print(f"commonWindowBlocks={args.common_window_blocks} fullWindowBlocks={args.post_attack_blocks}")
     print(f"priceUnitWei={args.price_unit}")
+    print(f"normalGasPriceMode={args.normal_gas_price_mode}")
+    if normal_gas_price_sampler:
+        print(f"normalFeeHistory={args.normal_fee_history}")
+        print(f"normalFeeField={args.normal_fee_field}")
+        print(f"normalFeeJitter={args.normal_fee_jitter}")
+        print(f"normalFeeMultiplier={args.normal_fee_multiplier}")
+        print(f"normalFeeSamplingStrategy={normal_gas_price_sampler.strategy}")
+        print(f"normalFeeFloorWei={normal_fee_floor_wei(args)}")
+        print(f"normalFeeCapWei={normal_fee_cap_wei(args)}")
+        print(f"normalFeeSourceStats={normal_gas_price_sampler.source_stats()}")
     print(f"receiver={receiver['address']} balanceWei={base.balance(rpc, receiver['address'])}")
 
     status = rpc.call("txpool_status")
@@ -567,7 +849,13 @@ def main():
             '--txs-per-sender',
             str(args.normal_txs_per_sender),
         ],
+        gas_price_sampler=normal_gas_price_sampler,
+        txs_per_sender=args.normal_txs_per_sender,
     )
+    if normal_gas_price_sampler:
+        normal_gas_price_generated_stats = normal_gas_price_sampler.generated_stats()
+    else:
+        normal_gas_price_generated_stats = gas_price_stats([int(normal_gas_price)] * accepted_count(normal_records))
     normal_records_path = out_dir / "normal_records.jsonl"
     write_jsonl(normal_records_path, normal_records)
     status_after_normal = rpc.call("txpool_status")
@@ -579,28 +867,31 @@ def main():
     status_after_attack = None
     if is_attack_mode:
         print("\n========== workload: send attack transactions ==========")
+        attack_extra = [
+            "--receiver",
+            receiver["address"],
+            "--value-wei",
+            "0",
+            "--gas-price-wei",
+            attack_gas_price,
+            "--gas",
+            str(args.attack_gas),
+            "--calldata-bytes",
+            str(args.attack_calldata_padding_bytes),
+            "--send-order",
+            "round-robin",
+            "--txs-per-sender",
+            str(args.attack_txs_per_sender),
+        ]
+        if args.attack_first_calldata_padding_bytes >= 0:
+            attack_extra += ["--first-calldata-bytes", str(args.attack_first_calldata_padding_bytes)]
         attack_records = run_helper_in_batches(
             repo_root,
             args,
             "attack",
             attack_accounts,
             out_dir,
-            [
-                "--receiver",
-                receiver["address"],
-                "--value-wei",
-                "0",
-                "--gas-price-wei",
-                attack_gas_price,
-                "--gas",
-                str(args.attack_gas),
-                "--calldata-bytes",
-                str(args.attack_calldata_padding_bytes),
-                "--send-order",
-                "round-robin",
-                "--txs-per-sender",
-                str(args.attack_txs_per_sender),
-            ],
+            attack_extra,
         )
         write_jsonl(attack_records_path, attack_records)
         status_after_attack = rpc.call("txpool_status")
@@ -633,9 +924,29 @@ def main():
         print("CHECK: txpool did not reach the expected pattern for this mode")
 
     wait_label = "attack execution" if is_attack_mode else "baseline execution"
-    print(f"\n========== wait for {wait_label} ==========")
-    wait_blocks(rpc, args.post_attack_blocks, args.post_attack_blocks * args.fresh_block_timeout)
-    receipts = receipt_statuses(rpc, attack_records, args.receipt_timeout) if is_attack_mode else {}
+    execution_window_start_block = base.hex_to_int(rpc.call("eth_blockNumber"))
+    common_window_target_block = execution_window_start_block + args.common_window_blocks
+    full_window_target_block = execution_window_start_block + args.post_attack_blocks
+    print(f"\n========== wait for {wait_label}: common window ==========")
+    common_window_observed_block = wait_until_block(
+        rpc,
+        common_window_target_block,
+        args.common_window_blocks * args.fresh_block_timeout,
+        start=execution_window_start_block,
+    )
+    full_window_observed_block = common_window_observed_block
+    if args.post_attack_blocks > args.common_window_blocks:
+        print(f"\n========== wait for {wait_label}: full window ==========")
+        full_window_observed_block = wait_until_block(
+            rpc,
+            full_window_target_block,
+            (args.post_attack_blocks - args.common_window_blocks) * args.fresh_block_timeout,
+        )
+
+    raw_attack_receipts = receipt_statuses(rpc, attack_records, args.receipt_timeout) if is_attack_mode else {}
+    attack_receipts_common = receipts_up_to_block(raw_attack_receipts, common_window_target_block)
+    receipts = receipts_up_to_block(raw_attack_receipts, full_window_target_block)
+    (out_dir / "attack_receipts_common_window.json").write_text(json.dumps(attack_receipts_common, indent=2), encoding="utf-8")
     receipts_path = out_dir / "attack_receipts.json"
     receipts_path.write_text(json.dumps(receipts, indent=2), encoding="utf-8")
     per_sender = {}
@@ -652,8 +963,14 @@ def main():
     for count in per_sender.values():
         mined_counts[count] = mined_counts.get(count, 0) + 1
     normal_receipts_timeout = 1 if is_attack_mode else args.receipt_timeout
-    normal_receipts = receipt_statuses(rpc, normal_records, normal_receipts_timeout)
+    raw_normal_receipts = receipt_statuses(rpc, normal_records, normal_receipts_timeout)
+    normal_receipts_common = receipts_up_to_block(raw_normal_receipts, common_window_target_block)
+    normal_receipts = receipts_up_to_block(raw_normal_receipts, full_window_target_block)
+    (out_dir / "normal_receipts_common_window.json").write_text(json.dumps(normal_receipts_common, indent=2), encoding="utf-8")
     (out_dir / "normal_receipts.json").write_text(json.dumps(normal_receipts, indent=2), encoding="utf-8")
+    normal_successful_receipts_common = successful_receipt_count(normal_receipts_common)
+    normal_failed_receipts_common = failed_receipt_count(normal_receipts_common)
+    normal_gas_used_common, normal_cost_wei_common = receipt_cost_summary(normal_receipts_common)
     normal_successful_receipts = successful_receipt_count(normal_receipts)
     normal_failed_receipts = failed_receipt_count(normal_receipts)
     attack_successful_receipts = successful_receipt_count(receipts)
@@ -663,13 +980,18 @@ def main():
     attack_successful_senders = sum(1 for count in per_sender.values() if count > 0)
     attack_cost_per_successful_sender = attack_cost_wei // attack_successful_senders if attack_successful_senders else ""
     attack_cost_per_evicted_normal = attack_cost_wei // normal_counts["dropped"] if normal_counts["dropped"] else ""
+    attack_present_after_attack = attack_counts["pending"] + attack_counts["queued"]
+    pool_amplification = ratio(attack_present_after_attack, attack_successful_receipts) if attack_successful_receipts else ""
     normal_rejected = sum(1 for record in normal_records if not record.get("hash") and not record.get("error"))
     attack_rejected = sum(1 for record in attack_records if not record.get("hash") and not record.get("error"))
     normal_errored = sum(1 for record in normal_records if record.get("error"))
     attack_errored = sum(1 for record in attack_records if record.get("error"))
+    print(f"normalReceiptsCommonWindow={len(normal_receipts_common)}")
+    print(f"normalReceiptsFullWindow={len(normal_receipts)}")
+    print(f"attackIncludedReceipts={len(receipts)}")
     print(f"attackSuccessfulReceipts={sum(per_sender.values())}")
     print(f"attackSuccessfulReceiptsPerSender={mined_counts}")
-    print(f"normalReceipts={len(normal_receipts)}")
+    print(f"poolAmplification={pool_amplification}")
     if is_attack_mode and mined_counts.get(1) == len(attack_accounts) and len(mined_counts) == 1 and len(normal_receipts) == 0:
         print("PASS: every attack sender has exactly one successful on-chain transaction and normal transactions have no receipts")
     elif not is_attack_mode and len(normal_receipts) > 0:
@@ -685,6 +1007,13 @@ def main():
         "trialId": args.trial_id,
         "rpc": args.rpc_url,
         "outDir": str(out_dir),
+        "executionWindowStartBlock": execution_window_start_block,
+        "commonWindowBlocks": args.common_window_blocks,
+        "commonWindowTargetBlock": common_window_target_block,
+        "commonWindowObservedBlock": common_window_observed_block,
+        "fullWindowBlocks": args.post_attack_blocks,
+        "fullWindowTargetBlock": full_window_target_block,
+        "fullWindowObservedBlock": full_window_observed_block,
         "normalSubmitted": args.normal_count,
         "normalAccepted": accepted_count(normal_records),
         "normalRejected": normal_rejected,
@@ -697,6 +1026,22 @@ def main():
         "normalPendingFinal": normal_counts["pending"],
         "normalQueuedFinal": normal_counts["queued"],
         "normalMissingFromTxpoolFinal": normal_counts["dropped"],
+        "normalReceiptsCommonWindow": len(normal_receipts_common),
+        "normalSuccessfulReceiptsCommonWindow": normal_successful_receipts_common,
+        "normalFailedReceiptsCommonWindow": normal_failed_receipts_common,
+        "normalGasUsedCommonWindow": normal_gas_used_common,
+        "normalCostWeiCommonWindow": normal_cost_wei_common,
+        "normalCostEthCommonWindow": wei_to_eth(normal_cost_wei_common),
+        "normalInclusionRateCommonWindow": ratio(len(normal_receipts_common), args.normal_count),
+        "normalSuccessfulInclusionRateCommonWindow": ratio(normal_successful_receipts_common, args.normal_count),
+        "normalReceiptsFullWindow": len(normal_receipts),
+        "normalSuccessfulReceiptsFullWindow": normal_successful_receipts,
+        "normalFailedReceiptsFullWindow": normal_failed_receipts,
+        "normalGasUsedFullWindow": normal_gas_used,
+        "normalCostWeiFullWindow": normal_cost_wei,
+        "normalCostEthFullWindow": wei_to_eth(normal_cost_wei),
+        "normalInclusionRateFullWindow": ratio(len(normal_receipts), args.normal_count),
+        "normalSuccessfulInclusionRateFullWindow": ratio(normal_successful_receipts, args.normal_count),
         "normalReceipts": len(normal_receipts),
         "normalSuccessfulReceipts": normal_successful_receipts,
         "normalFailedReceipts": normal_failed_receipts,
@@ -716,7 +1061,9 @@ def main():
         "attackPendingFinal": attack_counts["pending"],
         "attackQueuedFinal": attack_counts["queued"],
         "attackDroppedFinal": attack_counts["dropped"],
+        "attackPresentAfterAttack": attack_present_after_attack,
         "attackReceipts": len(receipts),
+        "attackIncludedReceipts": len(receipts),
         "attackSuccessfulReceipts": attack_successful_receipts,
         "attackFailedReceipts": attack_failed_receipts,
         "attackSuccessfulReceiptsPerSender": json.dumps(mined_counts, sort_keys=True, separators=(",", ":")),
@@ -724,16 +1071,32 @@ def main():
         "attackGasUsedOnChain": attack_gas_used,
         "attackCostWei": attack_cost_wei,
         "attackCostEth": wei_to_eth(attack_cost_wei),
+        "attackWorkloadExecutionCostWei": attack_cost_wei,
+        "attackWorkloadExecutionCostEth": wei_to_eth(attack_cost_wei),
         "attackCostPerSuccessfulSenderWei": attack_cost_per_successful_sender,
         "attackCostPerEvictedNormalWei": attack_cost_per_evicted_normal,
+        "poolAmplification": pool_amplification,
         "priceUnitWei": args.price_unit,
         "setupPrice": args.setup_price,
         "normalPrice": args.normal_price,
         "attackerPrice": args.attacker_price,
+        "normalGasPriceMode": args.normal_gas_price_mode,
+        "normalFeeHistory": args.normal_fee_history or "",
+        "normalFeeField": args.normal_fee_field if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeJitter": args.normal_fee_jitter if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeMultiplier": args.normal_fee_multiplier if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeSamplingStrategy": args.normal_fee_sampling_strategy if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeFloorWei": normal_fee_floor_wei(args) if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeCapWei": normal_fee_cap_wei(args) if args.normal_gas_price_mode == "sampled" else "",
+        "normalGasPriceMinWei": normal_gas_price_generated_stats.get("minWei", ""),
+        "normalGasPriceMedianWei": normal_gas_price_generated_stats.get("medianWei", ""),
+        "normalGasPriceAvgWei": normal_gas_price_generated_stats.get("avgWei", ""),
+        "normalGasPriceMaxWei": normal_gas_price_generated_stats.get("maxWei", ""),
         "normalGas": args.normal_gas,
         "attackGas": args.attack_gas,
         "normalCalldataBytes": args.normal_calldata_bytes,
         "attackCalldataPaddingBytes": args.attack_calldata_padding_bytes,
+        "attackFirstCalldataPaddingBytes": args.attack_first_calldata_padding_bytes if is_attack_mode and args.attack_first_calldata_padding_bytes >= 0 else "",
         "normalSenders": len(normal_accounts),
         "normalTxsPerSender": args.normal_txs_per_sender,
         "attackSenders": len(attack_accounts),
@@ -756,17 +1119,38 @@ def main():
         "normalTxsPerSender": args.normal_txs_per_sender,
         "normalCalldataBytes": args.normal_calldata_bytes,
         "normalGas": args.normal_gas,
+        "normalGasPriceMode": args.normal_gas_price_mode,
+        "normalFeeHistory": args.normal_fee_history,
+        "normalFeeField": args.normal_fee_field if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeJitter": args.normal_fee_jitter if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeMultiplier": args.normal_fee_multiplier if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeSamplingStrategy": args.normal_fee_sampling_strategy if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeFloorWei": normal_fee_floor_wei(args) if args.normal_gas_price_mode == "sampled" else "",
+        "normalFeeCapWei": normal_fee_cap_wei(args) if args.normal_gas_price_mode == "sampled" else "",
+        "normalGasPriceStats": normal_gas_price_generated_stats,
         "attackSenders": len(attack_accounts),
         "attackTxsPerSender": args.attack_txs_per_sender,
         "attackCalldataPaddingBytes": args.attack_calldata_padding_bytes,
+        "attackFirstCalldataPaddingBytes": args.attack_first_calldata_padding_bytes if is_attack_mode and args.attack_first_calldata_padding_bytes >= 0 else "",
+        "executionWindowStartBlock": execution_window_start_block,
+        "commonWindowBlocks": args.common_window_blocks,
+        "commonWindowTargetBlock": common_window_target_block,
+        "commonWindowObservedBlock": common_window_observed_block,
+        "fullWindowBlocks": args.post_attack_blocks,
+        "fullWindowTargetBlock": full_window_target_block,
+        "fullWindowObservedBlock": full_window_observed_block,
         "afterNormal": status_after_normal,
         "afterAttack": status_after_attack,
         "normalLocations": normal_counts,
         "attackLocations": attack_counts,
         "txpoolContentUsed": txpool_content_used,
+        "normalReceiptsCommonWindow": len(normal_receipts_common),
+        "normalReceiptsFullWindow": len(normal_receipts),
+        "attackIncludedReceipts": len(receipts),
         "attackSuccessfulReceiptsPerSender": mined_counts,
         "attackSuccessfulReceipts": attack_successful_receipts,
         "normalReceipts": len(normal_receipts),
+        "poolAmplification": pool_amplification,
         "metrics": metrics,
         "outDir": str(out_dir),
     }

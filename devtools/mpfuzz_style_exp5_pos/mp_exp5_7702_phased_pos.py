@@ -1127,6 +1127,8 @@ def main():
             normal_sent_this_tick = 0
             attack_sent_this_tick = 0
             attack_active_senders_this_tick = 0
+            normal_send_elapsed_seconds = 0.0
+            attack_send_elapsed_seconds = 0.0
             plan_row = normal_workload_by_tick[global_tick + 1]
 
             if send_normal:
@@ -1139,6 +1141,7 @@ def main():
                     )
                 else:
                     normal_accounts_this_tick = normal_accounts_for_tick(normal_background_accounts, args, global_tick + 1)
+                normal_send_started = time.monotonic()
                 records, normal_sent_this_tick = send_workload(
                     repo_root,
                     args,
@@ -1152,6 +1155,7 @@ def main():
                     gas_price_sampler=normal_gas_price_sampler,
                     nonce_tracker=normal_nonce_tracker,
                 )
+                normal_send_elapsed_seconds = time.monotonic() - normal_send_started
                 for record in records:
                     record.update(globalTick=global_tick + 1, submittedPhaseTick=tick + 1,
                                   submittedAtBlock=current_block, normalRole=normal_role)
@@ -1163,6 +1167,7 @@ def main():
                 normal_hashes.update(accepted_hashes(records))
 
             if send_attack and args.mode == "attack":
+                attack_send_started = time.monotonic()
                 if args.attack_presign:
                     tick_info = presigned_attack_ticks.get(str(tick), {})
                     attack_active_senders_this_tick = int(tick_info.get("activeSenders", 0))
@@ -1194,6 +1199,7 @@ def main():
                     else:
                         records = []
                         attack_sent_this_tick = 0
+                attack_send_elapsed_seconds = time.monotonic() - attack_send_started
                 for record in records:
                     record.update(globalTick=global_tick + 1, submittedPhaseTick=tick + 1,
                                   submittedAtBlock=current_block)
@@ -1247,6 +1253,8 @@ def main():
                 "observationStartBlock": observation_start_block,
                 "sendEndBlock": send_end_block,
                 "sendElapsedSeconds": send_elapsed_seconds,
+                "normalSendElapsedSeconds": normal_send_elapsed_seconds,
+                "attackSendElapsedSeconds": attack_send_elapsed_seconds,
                 "targetBlock": target_block,
                 "normalSubmittedThisTick": normal_sent_this_tick,
                 "attackSubmittedThisTick": attack_sent_this_tick,
@@ -1308,6 +1316,8 @@ def main():
         "observationStartBlock",
         "sendEndBlock",
         "sendElapsedSeconds",
+        "normalSendElapsedSeconds",
+        "attackSendElapsedSeconds",
         "targetBlock",
         "normalSubmittedThisTick",
         "attackSubmittedThisTick",

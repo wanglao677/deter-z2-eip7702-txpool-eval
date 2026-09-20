@@ -104,6 +104,14 @@ PROFILES = {
                                                phases=[2, 4, 4, 4, 20], slot=30,
                                                tailPaddingBytes=32768, attackPresign=True,
                                                chainId=13371396, batchSize=180, runTimeout=21600),
+    "layered-1m-p32k-burst16": dict(pool="LAYERED", capacity=None, layerMaxCapacity=1_000_000,
+                                     normalSenders=100, normalRate=800,
+                                     normalVictimSenders=3200, recoveryNormalRate=0,
+                                     attackSenders=1000, attackRate=8000,
+                                     phases=[2, 4, 4, 4, 20], slot=30,
+                                     tailPaddingBytes=32768, normalHelperSendWorkers=32,
+                                     attackHelperSendWorkers=16, attackPresign=True,
+                                     chainId=13371398, batchSize=180, runTimeout=21600),
     "layered-1m-firstevict-p36k": dict(pool="LAYERED", capacity=None, layerMaxCapacity=1_000_000,
                                        normalSenders=100, normalRate=800,
                                        normalVictimSenders=3200, recoveryNormalRate=0,
@@ -138,6 +146,14 @@ PROFILES = {
                                     tailPaddingBytes=24576, normalHelperSendWorkers=32,
                                     attackHelperSendWorkers=16, attackPresign=True,
                                     chainId=13371397, batchSize=120, runTimeout=21600),
+    # Burst16 saturated Besu's HTTP RPC with 24KB requests. Keep pre-signing
+    # but use a bounded worker count for a transport-stable p24k replay.
+    "default-v5-p24k-burst8": dict(pool="LAYERED", capacity=None, normalSenders=100, normalRate=800,
+                                   normalVictimSenders=3200, recoveryNormalRate=0,
+                                   attackSenders=8000, attackRate=64000, phases=[2, 4, 4, 4, 20], slot=30,
+                                   tailPaddingBytes=24576, normalHelperSendWorkers=16,
+                                   attackHelperSendWorkers=8, attackPresign=True,
+                                   chainId=13371399, batchSize=120, runTimeout=21600),
     "default-v5-p32k": dict(pool="LAYERED", capacity=None, normalSenders=100, normalRate=800,
                             normalVictimSenders=3200, recoveryNormalRate=0,
                             attackSenders=8000, attackRate=64000, phases=[2, 4, 4, 4, 20], slot=30,
@@ -477,6 +493,14 @@ def normal_fingerprint(run_dir):
     records = audit.read_jsonl(run_dir / "normal_records.jsonl")
     canonical = [{key: row.get(key) for key in ("sender", "nonce", "gasPriceWei", "globalTick", "hash")}
                  for row in records]
+    # Worker completion order is nondeterministic. Compare the scheduled normal
+    # transaction set, not the order in which concurrent helper calls printed it.
+    canonical.sort(key=lambda row: (
+        int(row.get("globalTick") or 0),
+        str(row.get("sender") or "").lower(),
+        int(row.get("nonce") or 0),
+        str(row.get("hash") or "").lower(),
+    ))
     return hashlib.sha256(json.dumps(canonical, sort_keys=True).encode()).hexdigest()
 
 

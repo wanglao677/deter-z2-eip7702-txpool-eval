@@ -1,0 +1,100 @@
+diff --git a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/AbstractTransactionsLayer.java b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/AbstractTransactionsLayer.java
+index b9975e9..498185d 100644
+--- a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/AbstractTransactionsLayer.java
++++ b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/AbstractTransactionsLayer.java
+@@ -124,6 +124,7 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+ 
+   @Override
+   public void reset() {
++    LayerTrace.reset(name(), pendingTransactions.size());
+     pendingTransactions.clear();
+     txsBySender.clear();
+     spaceUsed = 0;
+@@ -369,6 +370,8 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+     increaseCounters(addedTx);
+     metrics.incrementAdded(addedTx, addReason, name());
+     internalAdd(senderTxs, addedTx);
++    LayerTrace.transition("enter", addedTx, name(), name(), addReason.name(), "LAYER",
++        spaceUsed, pendingTransactions.size());
+     LOG.atTrace()
+         .setMessage("[{}] added pending transactions {}, reason: {}")
+         .addArgument(name())
+@@ -395,6 +398,8 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+       while ((evictedSize < spaceToFree || txsToEvict > evictedCount)
+           && !lessReadySenderTxs.isEmpty()) {
+         lastTx = lessReadySenderTxs.pollLastEntry().getValue();
++        LayerTrace.choice(evictableTx, lastTx, name(), nextLayer.name(), spaceToFree,
++            txsToEvict, spaceUsed, pendingTransactions.size());
+         processEvict(lessReadySenderTxs, lastTx, EVICTED);
+         ++evictedCount;
+         evictedSize += lastTx.memorySize();
+@@ -421,6 +426,8 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+     decreaseCounters(replacedTx);
+     metrics.incrementRemoved(replacedTx, REPLACED.label(), name());
+     internalReplaced(replacedTx);
++    LayerTrace.transition("leave", replacedTx, name(), "", REPLACED.label(), "POOL",
++        spaceUsed, pendingTransactions.size());
+     notifyTransactionDropped(replacedTx, REPLACED);
+   }
+ 
+@@ -457,6 +464,8 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+       decreaseCounters(removedTx);
+       metrics.incrementRemoved(removedTx, removalReason.label(), name());
+       internalRemove(senderTxs, removedTx, removalReason);
++      LayerTrace.transition("leave", removedTx, name(), "", removalReason.label(),
++          removalReason.removedFrom().name(), spaceUsed, pendingTransactions.size());
+       if (removalReason.removedFrom().equals(POOL)) {
+         logRemoved(removedTx, removalReason, name());
+         notifyTransactionDropped(removedTx, removalReason);
+@@ -476,6 +485,8 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
+       decreaseCounters(evictedTx);
+       metrics.incrementRemoved(evictedTx, reason.label(), name());
+       internalEvict(senderTxs, removedTx);
++      LayerTrace.transition("leave", removedTx, name(), nextLayer.name(), reason.label(),
++          "LAYER", spaceUsed, pendingTransactions.size());
+     }
+     return removedTx;
+   }
+diff --git a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/EndLayer.java b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/EndLayer.java
+index 2b9c9a1..f7c6ffb 100644
+--- a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/EndLayer.java
++++ b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/EndLayer.java
+@@ -86,6 +86,7 @@ public class EndLayer implements TransactionsLayer {
+   @Override
+   public TransactionAddedResult add(
+       final PendingTransaction pendingTransaction, final int gap, final AddReason reason) {
++    LayerTrace.transition("drop", pendingTransaction, name(), "", DROPPED.label(), "POOL", 0, 0);
+     logRemoved(pendingTransaction, DROPPED, name());
+     notifyTransactionDropped(pendingTransaction, DROPPED);
+     metrics.incrementRemoved(pendingTransaction, DROPPED.label(), name());
+diff --git a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/LayeredPendingTransactions.java b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/LayeredPendingTransactions.java
+index b11851b..86d66e4 100644
+--- a/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/LayeredPendingTransactions.java
++++ b/ethereum/eth/src/main/java/org/hyperledger/besu/ethereum/eth/transactions/layered/LayeredPendingTransactions.java
+@@ -71,6 +71,7 @@ public class LayeredPendingTransactions implements PendingTransactions {
+     this.poolConfig = poolConfig;
+     this.prioritizedTransactions = prioritizedTransactions;
+     this.ethScheduler = ethScheduler;
++    LayerTrace.block(-1, "", "pool_start");
+   }
+ 
+   @Override
+@@ -410,8 +411,10 @@ public class LayeredPendingTransactions implements PendingTransactions {
+ 
+     synchronized (this) {
+       try {
++        LayerTrace.block(blockHeader.getNumber(), blockHeader.getHash().toHexString(), "block_begin");
+         prioritizedTransactions.blockAdded(feeMarket, blockHeader, maxConfirmedNonceBySender);
+       } catch (final Throwable throwable) {
++        LayerTrace.block(blockHeader.getNumber(), blockHeader.getHash().toHexString(), "block_error");
+         LOG.warn(
+             "Unexpected error {} when managing added block {}, maxNonceBySender {}, reorgNonceRangeBySender {}",
+             throwable,
+@@ -422,6 +425,7 @@ public class LayeredPendingTransactions implements PendingTransactions {
+       }
+ 
+       logConfirmed(blockHeader, maxConfirmedNonceBySender, reorgTransactions);
++      LayerTrace.block(blockHeader.getNumber(), blockHeader.getHash().toHexString(), "block_end");
+     }
+   }
+ 

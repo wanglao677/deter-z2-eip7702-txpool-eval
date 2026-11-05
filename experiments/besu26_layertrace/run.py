@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -36,6 +37,8 @@ def rpc_tx_fee_cap_wei(config):
         raise RuntimeError("rpcTxFeeCapEth must be a positive integer number of ETH")
     # Besu 26.6.1 accepts --rpc-tx-feecap in Wei, not ETH.
     cap_wei = cap_eth * 10**18
+    if cap_wei > 2**64 - 1:
+        raise RuntimeError("rpcTxFeeCapEth exceeds Besu 26.6.1's unsigned 64-bit Wei CLI limit; use at most 18 ETH")
     fees = {
         "deployment": 2_000_000 * config["setupGasPriceWei"],
         "authorization": 250_000 * config["setupGasPriceWei"],
@@ -59,6 +62,28 @@ def network_config(config, image):
         network_params=dict(network_id="13371349", seconds_per_slot=config["secondsPerSlot"]), additional_services=[])
 
 
+def validate_besu_cli(image, params, version):
+    # --version still invokes Besu's option converters, without starting a node.
+    name = "besu-layertrace-cli-" + uuid.uuid4().hex
+    command = ["docker", "run", "--rm", "--name", name, "--network", "none",
+               "--hostname", "localhost", "--memory", "1g", "--entrypoint", "/opt/besu/bin/besu",
+               image, *params, "--version"]
+    print("Preflight: checking generated CLI options with the actual Besu image...", flush=True)
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
+    except subprocess.TimeoutExpired as error:
+        try:
+            subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=15)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(f"Besu CLI preflight timed out; check container {name}") from error
+        raise RuntimeError("Besu CLI preflight timed out; no enclave was created") from error
+    message = (result.stdout + "\n" + result.stderr).strip()
+    if result.returncode or f"besu/v{version}/" not in result.stdout:
+        raise RuntimeError(f"Besu CLI preflight failed; no enclave was created:\n{message}")
+    print("Preflight: Besu CLI options accepted.", flush=True)
+    return message
+
+
 def prepare(args, config):
     network = network_config(config, args.image)
     for tool in ("docker", "git", "kurtosis"):
@@ -75,6 +100,7 @@ def prepare(args, config):
     verification = json.loads(verification_path.read_text()) if verification_path.exists() else {}
     if not verification.get("passed") or verification.get("imageId") != image["Id"]:
         raise RuntimeError("Run verify.py on this exact image before preparing a full experiment")
+    cli_preflight = validate_besu_cli(args.image, network["participants"][0]["el_extra_params"], config["besuVersion"])
     # The slim evaluation repo has no go.mod; compile its exact helper using the existing geth module.
     if not (args.geth_repo / "go.mod").is_file():
         raise RuntimeError(f"Missing geth Go module: {args.geth_repo}")
@@ -95,7 +121,7 @@ def prepare(args, config):
         gethCommit=output(["git", "-C", str(args.geth_repo), "rev-parse", "HEAD"]),
         gethModuleSha256=sha(args.geth_repo / "go.mod"), imageId=image["Id"], imageLabels=image["Config"].get("Labels", {}),
         gethDirtyStatus=output(["git", "-C", str(args.geth_repo), "status", "--short"]),
-        verification=verification,
+        verification=verification, cliPreflight=cli_preflight,
         packageCommit=output(["git", "-C", str(package), "rev-parse", "HEAD"]),
         kurtosisVersion=output(["kurtosis", "version"]), pythonVersion=sys.version,
         pipFreeze=output([sys.executable, "-m", "pip", "freeze"]),

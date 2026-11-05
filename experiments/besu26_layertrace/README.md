@@ -27,12 +27,16 @@ Prioritized → Ready → Sparse → EndLayer，以及最终退出池子的原�
 
 明确标准化的差异：normal 每个 sender 注资 50 ETH，attack 300 ETH，以覆盖
 128 笔累计 upfront cost；setup 使用 1 gwei。旧结果文件未记录完整注资配置，
-因此本轮不声称逐项复刻旧 setup。RPC 单笔费用上限显式设置 20 ETH，
+因此本轮不声称逐项复刻旧 setup。RPC 单笔费用上限显式设置 5 ETH，
 允许上述高价格负载提交；这是 RPC 接纳设置，不是池驱逐规则。
 注意 Besu 26.6.1 的 `--rpc-tx-feecap` 单位为 **Wei**：配置中的
-`rpcTxFeeCapEth: 20` 应生成 `--rpc-tx-feecap=20000000000000000000`。
+`rpcTxFeeCapEth: 5` 应生成 `--rpc-tx-feecap=5000000000000000000`。
 `--rpc-tx-feecap=20` 只有 20 Wei，会在部署阶段报 `Transaction fee cap exceeded`。
-`prepare` 会在启动网络前校验部署、授权及实验交易的最大费用是否在该上限内。
+该版 CLI 将此参数解析为十进制 unsigned long，不接受十六进制；20 ETH 的 Wei 数值
+超过其上限 `2^64 - 1`，会使节点直接退出。5 ETH 高于本实验约 2 ETH 的最高单笔费用；
+此调整不改变交易 gas price、gas limit、注资或交易池策略。
+`prepare` 会在启动网络前校验参数范围与各类交易最大费用，并用实际 Besu 镜像和生成的
+CLI 参数运行 `--version` 检查参数解析。不连接网络，不创建 enclave，超时会清理专属检查容器。
 Lighthouse 镜像固定 digest，所有运行保存镜像 ID、实际启动命令、Go/包版本和配置散列。
 
 ## 安装与准备（Ubuntu / WSL 中执行）
@@ -61,6 +65,7 @@ python -c "import solcx; solcx.install_solc('0.8.20')"
 python experiments/besu26_layertrace/build_image.py
 python experiments/besu26_layertrace/verify.py
 python -m unittest discover -s experiments/besu26_layertrace/tests -v
+BESU_TEST_IMAGE=besu:26.6.1-layertrace python -m unittest discover -s experiments/besu26_layertrace/tests -v
 python experiments/besu26_layertrace/run.py prepare
 python experiments/besu26_layertrace/run.py plan
 ```

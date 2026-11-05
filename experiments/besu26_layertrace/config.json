@@ -21,7 +21,7 @@
   "fullWindowBlocks": 10,
   "normalSendOrder": "account",
   "attackSendOrder": "round-robin",
-  "rpcTxFeeCapEth": 20,
+  "rpcTxFeeCapEth": 5,
   "poolPolicy": "LAYERED release defaults; no capacity/comparator/balance-check overrides",
   "ethereumPackageCommit": "c4a8e15d40f0965f3728f776d72f1954440ad96b",
   "lighthouseImage": "sigp/lighthouse@sha256:44aa773dcf274122c32cc41c4dae7124ed3cab5c267ee82174c6dfd9c688da96"

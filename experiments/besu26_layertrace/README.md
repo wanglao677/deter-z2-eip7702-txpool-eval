@@ -36,12 +36,19 @@ Lighthouse 镜像固定 digest，所有运行保存镜像 ID、实际启动命�
 使用独立目录，保留现有完整 geth 工作区供 helper 编译。
 以下假定完整 geth 位于 `$HOME/ETH/pos-exp/go-ethereum-pos`，本地实验密钥文件仍在其
 `devtools/mpfuzz_style_exp5_pos/key_prive_exp5.csv`，不会上传密钥。
+该 CSV 只包含 `a` 和 `x`；`funded0` 出资账户还需要在运行 `prepare` 和 `pair` 的同一终端中设置
+`EXP5_FUNDER_PRIVATE_KEY`。脚本会在启动网络前检查私钥格式与出资地址是否一致，
+不会在错误消息中显示私钥。若关闭终端或进入新的 tmux shell，需重新设置该变量。
 
 ```bash
 cd ~/ETH
 git clone --branch besu26-layertrace --single-branch git@github.com:wanglao677/deter-z2-eip7702-txpool-eval.git besu26-layertrace-eval
 cd ~/ETH/besu26-layertrace-eval
 source ~/ETH/pos-exp/go-ethereum-pos/.venv-exp5/bin/activate
+
+# 在当前终端安全输入 funded0 私钥，输入时不回显，也不写入 shell 历史。
+read -rsp 'funded0 devnet private key: ' EXP5_FUNDER_PRIVATE_KEY; printf '\n'
+export EXP5_FUNDER_PRIVATE_KEY
 
 # 仅在该虚拟环境缺少依赖时安装；不要用 sudo pip。
 python -m pip install web3 py-solc-x
@@ -79,6 +86,8 @@ python experiments/besu26_layertrace/run.py prepare \
 ```bash
 cd ~/ETH/besu26-layertrace-eval
 source ~/ETH/pos-exp/go-ethereum-pos/.venv-exp5/bin/activate
+read -rsp 'funded0 devnet private key: ' EXP5_FUNDER_PRIVATE_KEY; printf '\n'
+export EXP5_FUNDER_PRIVATE_KEY
 python -u experiments/besu26_layertrace/run.py pair --seed seed01
 ```
 

@@ -18,6 +18,25 @@ import mp_exp5_7702_pos as delegate_tools
 import mp_exp5_7702_scale_pos as scale
 
 
+def validate_funder_key():
+    """Check the local devnet sponsor before any network is started or tx is sent."""
+    key = os.environ.get("EXP5_FUNDER_PRIVATE_KEY", "").strip()
+    if not key:
+        raise RuntimeError(
+            "Missing EXP5_FUNDER_PRIVATE_KEY in this terminal. The key CSV only supplies a/x; "
+            "set the funded0 devnet private key locally, then run prepare again. "
+            "Never paste the key into logs or chat."
+        )
+    try:
+        from eth_account import Account
+        signer_address = Account.from_key(key).address
+    except (ValueError, TypeError) as exc:
+        raise RuntimeError("EXP5_FUNDER_PRIVATE_KEY is not a valid 32-byte private key") from None
+    if signer_address.lower() != base.DEFAULT_FUNDER["address"].lower():
+        raise RuntimeError("EXP5_FUNDER_PRIVATE_KEY does not match the funded0 devnet address")
+    base.DEFAULT_FUNDER["private_key"] = key
+
+
 def save(path, data):
     Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -141,6 +160,7 @@ def validate_setup(rows, config, delegate):
 
 def run(args):
     os.umask(0o077)
+    validate_funder_key()
     config = json.loads((HERE / "config.json").read_text())
     out = args.out.resolve()
     if (out / "workload_manifest.json").exists():

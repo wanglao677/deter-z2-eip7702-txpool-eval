@@ -14,7 +14,7 @@ from pathlib import Path
 
 from audit import audit
 from build_image import COMMIT
-from workload import LEGACY, save
+from workload import LEGACY, save, validate_funder_key
 
 HERE = Path(__file__).resolve().parent
 BUILD = HERE / ".build"
@@ -59,6 +59,7 @@ def prepare(args, config):
         raise RuntimeError(f"Missing geth Go module: {args.geth_repo}")
     if not args.key_csv.is_file():
         raise RuntimeError(f"Missing local test key CSV: {args.key_csv}")
+    validate_funder_key()
     BUILD.mkdir(parents=True, exist_ok=True)
     helper = BUILD / "eip7702_scale_helper"
     subprocess.run([str(args.go), "build", "-o", str(helper), str(LEGACY / "eip7702_scale_helper.go")], cwd=args.geth_repo, check=True)

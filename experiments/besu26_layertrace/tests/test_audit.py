@@ -2,12 +2,14 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from audit import replay
 from run import network_config
-from workload import Rpc, validate_setup
+from workload import Rpc, validate_funder_key, validate_setup
+from workload import base
 
 
 class AuditTests(unittest.TestCase):
@@ -85,6 +87,25 @@ class AuditTests(unittest.TestCase):
 
 
 class WorkloadTests(unittest.TestCase):
+    def test_missing_sponsor_key_fails_before_network_start(self):
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "EXP5_FUNDER_PRIVATE_KEY"):
+                validate_funder_key()
+
+    def test_wrong_sponsor_key_rejected_without_disclosing_it(self):
+        with patch.dict("os.environ", {"EXP5_FUNDER_PRIVATE_KEY": "0x" + "11" * 32}):
+            with self.assertRaisesRegex(RuntimeError, "does not match"):
+                validate_funder_key()
+
+    def test_valid_sponsor_key_sets_legacy_account(self):
+        from eth_account import Account
+        key = "0x" + "11" * 32
+        with patch.dict("os.environ", {"EXP5_FUNDER_PRIVATE_KEY": key}), patch.dict(
+            base.DEFAULT_FUNDER, {"address": Account.from_key(key).address}
+        ):
+            validate_funder_key()
+            self.assertEqual(base.DEFAULT_FUNDER["private_key"], key)
+
     def test_rpc_batches_match_ids_not_response_order(self):
         rpc = Rpc("unused")
         rpc.request = lambda request: [dict(id=1, result="second"), dict(id=0, result="first")]

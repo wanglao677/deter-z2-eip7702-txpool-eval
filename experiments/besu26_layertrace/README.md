@@ -29,6 +29,10 @@ Prioritized → Ready → Sparse → EndLayer，以及最终退出池子的原�
 128 笔累计 upfront cost；setup 使用 1 gwei。旧结果文件未记录完整注资配置，
 因此本轮不声称逐项复刻旧 setup。RPC 单笔费用上限显式设置 20 ETH，
 允许上述高价格负载提交；这是 RPC 接纳设置，不是池驱逐规则。
+注意 Besu 26.6.1 的 `--rpc-tx-feecap` 单位为 **Wei**：配置中的
+`rpcTxFeeCapEth: 20` 应生成 `--rpc-tx-feecap=20000000000000000000`。
+`--rpc-tx-feecap=20` 只有 20 Wei，会在部署阶段报 `Transaction fee cap exceeded`。
+`prepare` 会在启动网络前校验部署、授权及实验交易的最大费用是否在该上限内。
 Lighthouse 镜像固定 digest，所有运行保存镜像 ID、实际启动命令、Go/包版本和配置散列。
 
 ## 安装与准备（Ubuntu / WSL 中执行）

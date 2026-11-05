@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from audit import replay
-from run import network_config
+from run import network_config, prepare, rpc_tx_fee_cap_wei
 from workload import Rpc, validate_funder_key, validate_setup
 from workload import base
 
@@ -87,6 +87,36 @@ class AuditTests(unittest.TestCase):
 
 
 class WorkloadTests(unittest.TestCase):
+    def config(self):
+        return json.loads((Path(__file__).resolve().parents[1] / "config.json").read_text())
+
+    def test_besu_fee_cap_is_serialized_in_wei(self):
+        config = self.config()
+        params = network_config(config, "test")["participants"][0]["el_extra_params"]
+        self.assertIn("--rpc-tx-feecap=20000000000000000000", params)
+        self.assertNotIn("--rpc-tx-feecap=20", params)
+        # Reproduce the rejected deployment: 0.002 ETH is above 20 Wei.
+        deploy_fee = 2_000_000 * config["setupGasPriceWei"]
+        self.assertGreater(deploy_fee, 20)
+        self.assertLess(deploy_fee, rpc_tx_fee_cap_wei(config))
+
+    def test_rpc_fee_cap_checks_high_price_workload_before_startup(self):
+        from types import SimpleNamespace
+        config = self.config()
+        config["rpcTxFeeCapEth"] = 1
+        with patch("run.shutil.which") as which:
+            with self.assertRaisesRegex(RuntimeError, "attack maximum fee"):
+                prepare(SimpleNamespace(image="test"), config)
+            which.assert_not_called()
+
+    def test_invalid_rpc_fee_cap_is_rejected(self):
+        for cap in (0, -1, True, 20.0, "20"):
+            with self.subTest(cap=cap):
+                config = self.config()
+                config["rpcTxFeeCapEth"] = cap
+                with self.assertRaisesRegex(RuntimeError, "positive integer"):
+                    network_config(config, "test")
+
     def test_missing_sponsor_key_fails_before_network_start(self):
         with patch.dict("os.environ", {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "EXP5_FUNDER_PRIVATE_KEY"):

@@ -30,16 +30,37 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def rpc_tx_fee_cap_wei(config):
+    cap_eth = config["rpcTxFeeCapEth"]
+    if type(cap_eth) is not int or cap_eth <= 0:
+        raise RuntimeError("rpcTxFeeCapEth must be a positive integer number of ETH")
+    # Besu 26.6.1 accepts --rpc-tx-feecap in Wei, not ETH.
+    cap_wei = cap_eth * 10**18
+    fees = {
+        "deployment": 2_000_000 * config["setupGasPriceWei"],
+        "authorization": 250_000 * config["setupGasPriceWei"],
+        "funding": 21_000 * config["setupGasPriceWei"],
+        "normal": config["normalGas"] * config["priceUnitWei"] * config["normalPriceMultiplier"],
+        "attack": config["attackGas"] * config["priceUnitWei"] * config["attackPriceMultiplier"],
+    }
+    for stage, fee in fees.items():
+        if fee > cap_wei:
+            raise RuntimeError(f"{stage} maximum fee {fee} Wei exceeds RPC fee cap {cap_wei} Wei")
+    return cap_wei
+
+
 def network_config(config, image):
+    fee_cap_wei = rpc_tx_fee_cap_wei(config)
     # JSON is valid YAML, so no additional YAML dependency is required.
     return dict(participants=[dict(el_type="besu", el_image=image, cl_type="lighthouse",
         cl_image=config["lighthouseImage"], count=1,
         el_extra_env_vars={"BESU_LAYER_TRACE_FILE": TRACE},
-        el_extra_params=["--tx-pool=LAYERED", "--rpc-tx-feecap=" + str(config["rpcTxFeeCapEth"])])],
+        el_extra_params=["--tx-pool=LAYERED", "--rpc-tx-feecap=" + str(fee_cap_wei)])],
         network_params=dict(network_id="13371349", seconds_per_slot=config["secondsPerSlot"]), additional_services=[])
 
 
 def prepare(args, config):
+    network = network_config(config, args.image)
     for tool in ("docker", "git", "kurtosis"):
         if not shutil.which(tool):
             raise RuntimeError(f"Missing command: {tool}")
@@ -80,7 +101,7 @@ def prepare(args, config):
         pipFreeze=output([sys.executable, "-m", "pip", "freeze"]),
         gitCommit=output(["git", "-C", str(HERE), "rev-parse", "HEAD"]))
     save(BUILD / "runtime_manifest.json", manifest)
-    save(BUILD / "network.json", network_config(config, args.image))
+    save(BUILD / "network.json", network)
     return helper, package, manifest
 
 

@@ -100,7 +100,18 @@ def private_jsonl(path, rows):
             f.write(json.dumps(row) + "\n")
 
 
-def send(helper, rpc, out, stage, accounts, flags, expected):
+def erigon_admission_error(message):
+    """Only explicit Erigon pool policy errors are safe to count as rejection."""
+    if not message:
+        return False
+    normalized = message.lower()
+    return any(phrase in normalized for phrase in (
+        "pending sub-pool is full", "basefee sub-pool is full", "queued sub-pool is full",
+        "underpriced", "insufficient funds", "nonce too low", "nonce gap too large",
+        "authority already reserved", "gas limit is too high", "fee too low"))
+
+
+def send(helper, rpc, out, stage, accounts, flags, expected, allow_rpc_errors=False):
     account_path = out / "private" / (stage + "_accounts.jsonl")
     private_jsonl(account_path, accounts)
     command = [str(helper), "--rpc", rpc.url, "--accounts", str(account_path), "--timeout", "30m"] + flags
@@ -118,8 +129,9 @@ def send(helper, rpc, out, stage, accounts, flags, expected):
     save(out / (stage + "_timing.json"), marker)
     print(f"{stage}: records={len(records)}/{expected}, seconds={marker['seconds']:.2f}, crossedBlocks={marker['crossedBlocks']}", flush=True)
     errors = [r for r in records if r.get("error") or not r.get("hash")]
-    if process.returncode or errors or len(records) != expected:
-        raise RuntimeError(f"{stage}: incomplete submission; preserve {stage}.jsonl and .stderr.log; no automatic resubmission")
+    allowed_errors = allow_rpc_errors and all(erigon_admission_error(r.get("error")) for r in errors)
+    if process.returncode or (errors and not allowed_errors) or len(records) != expected:
+        raise RuntimeError(f"{stage}: incomplete/ambiguous submission; preserve {stage}.jsonl and .stderr.log; no automatic resubmission")
     return records
 
 
@@ -127,9 +139,12 @@ def receipts(rpc, records):
     found = []
     for offset in range(0, len(records), 100):
         batch = records[offset:offset + 100]
-        replies = rpc.batch("eth_getTransactionReceipt", [[r["hash"]] for r in batch])
-        found.extend(dict(kind=r["kind"], label=r["label"], hash=r["hash"], receipt=receipt)
-                     for r, receipt in zip(batch, replies))
+        submitted = [r for r in batch if r.get("hash") and not r.get("error")]
+        replies = rpc.batch("eth_getTransactionReceipt", [[r["hash"]] for r in submitted])
+        by_hash = {r["hash"].lower(): receipt for r, receipt in zip(submitted, replies)}
+        found.extend(dict(kind=r["kind"], label=r["label"], hash=r.get("hash"),
+                          receipt=by_hash.get((r.get("hash") or "").lower()),
+                          submissionError=r.get("error")) for r in batch)
     return found
 
 
@@ -176,12 +191,12 @@ def block_point(rpc, number, genesis_timestamp, seconds_per_slot):
 
 
 def first_attack_balances(rpc, records, receipt_rows, setup_rows, final_rows):
-    by_hash = {row["hash"].lower(): row["receipt"] for row in receipt_rows}
+    by_hash = {row["hash"].lower(): row["receipt"] for row in receipt_rows if row.get("hash")}
     setup = {row["address"].lower(): row for row in setup_rows}
     final = {row["address"].lower(): row for row in final_rows}
     included_in_block = {}
     for row in records:
-        receipt = by_hash.get(row["hash"].lower())
+        receipt = by_hash.get((row.get("hash") or "").lower())
         if receipt:
             key = (row["sender"].lower(), int(receipt["blockNumber"], 16))
             included_in_block[key] = included_in_block.get(key, 0) + 1
@@ -190,8 +205,8 @@ def first_attack_balances(rpc, records, receipt_rows, setup_rows, final_rows):
         if not record["label"].endswith("-x1"):
             continue
         sender = record["sender"].lower()
-        receipt = by_hash.get(record["hash"].lower())
-        row = dict(sender=record["sender"], label=record["label"], firstHash=record["hash"],
+        receipt = by_hash.get((record.get("hash") or "").lower())
+        row = dict(sender=record["sender"], label=record["label"], firstHash=record.get("hash"),
                    setupBalanceWei=setup[sender]["balanceWei"],
                    windowBalanceWei=final[sender]["balanceWei"],
                    firstIncludedBlock=None, firstReceiptStatus=None,
@@ -224,12 +239,20 @@ def run(args):
     out.mkdir(parents=True, exist_ok=True)
     (out / "private").mkdir(mode=0o700, exist_ok=True)
     rpc = Rpc(args.rpc)
+    client = args.client
+    if client == "erigon":
+        sys.path.insert(0, str(HERE.parent / "erigon35_phase1"))
+        from observer import capture as erigon_capture
+        if not args.container:
+            raise RuntimeError("Erigon workload needs --container for per-hash trace collection")
     version = rpc.call("web3_clientVersion")
-    if not version.startswith("besu/v26.6.1/"):
-        raise RuntimeError(f"Expected Besu 26.6.1; received {version}")
+    prefix = "erigon/3.5.0/" if client == "erigon" else "besu/v26.6.1/"
+    if not version.startswith(prefix):
+        raise RuntimeError(f"Expected {prefix}; received {version}")
     chain_id = int(rpc.call("eth_chainId"), 16)
-    if chain_id != 13371349:
-        raise RuntimeError("Expected the generated local devnet chain ID 13371349")
+    expected_chain = config.get("chainId", 13371349)
+    if chain_id != expected_chain:
+        raise RuntimeError(f"Expected local devnet chain ID {expected_chain}; received {chain_id}")
     accounts = base.load_key_csv(args.key_csv)
     funder = accounts[base.DEFAULT_FUNDER["label"]]
     if config.get("evaluationGroups"):
@@ -237,8 +260,8 @@ def run(args):
         actual = int(rpc.call("eth_getBalance", [funder["address"], "0x0"]), 16)
         if actual != expected:
             raise RuntimeError("Phase 1 funder genesis balance does not match the plan; no workload submitted")
-    normal = scale.derive_accounts("n", config["normalSenders"], args.seed + ":besu")
-    attackers = scale.derive_accounts("a", config["attackSenders"], args.seed + ":besu")
+    normal = scale.derive_accounts("n", config["normalSenders"], args.seed + ":" + client)
+    attackers = scale.derive_accounts("a", config["attackSenders"], args.seed + ":" + client)
     total_funding = (config["normalSenders"] * config["normalFundEth"] + config["attackSenders"] * config["attackFundEth"]) * 10**18
     if int(rpc.call("eth_getBalance", [funder["address"], "latest"]), 16) < total_funding + 10**18:
         raise RuntimeError("Local devnet funder cannot cover matched setup")
@@ -289,6 +312,8 @@ def run(args):
     if any(int(v, 16) for v in rpc.call("txpool_status").values()):
         raise RuntimeError("Setup did not drain the pool")
     wait_block(rpc, rpc.height() + 1)
+    if client == "erigon":
+        erigon_capture(rpc, args.container, out, "T0")
     fee_plan = normal_fee_plan(config, normal)
     price_file = write_normal_fee_plan(out, config, fee_plan)
     normal_flags = ["--mode", "normal", "--value-wei", "1", "--gas", str(config["normalGas"]),
@@ -297,20 +322,30 @@ def run(args):
                     "--txs-per-sender", str(config["txsPerSender"])]
     if price_file:
         normal_flags += ["--gas-price-wei-list", str(price_file)]
-    normal_records = send(args.helper, rpc, out, "normal", normal, normal_flags, len(fee_plan))
+    normal_records = send(args.helper, rpc, out, "normal", normal, normal_flags, len(fee_plan),
+                          allow_rpc_errors=(client == "erigon"))
     verify_normal_fee_records(normal_records, fee_plan)
     normal_timing = json.loads((out / "normal_timing.json").read_text())
     save(out / "normal_block_points.json", dict(
         start=block_point(rpc, normal_timing["before"]["block"], genesis_timestamp, config["secondsPerSlot"]),
         end=block_point(rpc, normal_timing["afterBlock"], genesis_timestamp, config["secondsPerSlot"])))
+    normal_anchor = normal_timing["afterBlock"]
     save(out / "pool_after_normal.json", dict(block=rpc.height(), status=rpc.call("txpool_status")))
+    if client == "erigon":
+        erigon_capture(rpc, args.container, out, "T1")
     attack_records = []
     if args.mode == "attack":
+        if client == "erigon":
+            t2 = erigon_capture(rpc, args.container, out, "T2")
+            save(out / "T2_marker.json", dict(block=t2["finishedBlock"],
+                                              unixMillis=t2["finishedUnixMillis"],
+                                              snapshotStable=t2["snapshotStable"]))
         attack_records = send(args.helper, rpc, out, "attack", attackers,
             ["--mode", "attack", "--receiver", receiver_address, "--value-wei", "0", "--gas", str(config["attackGas"]),
              "--gas-price-wei", str(config["priceUnitWei"] * config["attackPriceMultiplier"]),
              "--calldata-bytes", str(config["attackTailPaddingBytes"]), "--first-calldata-bytes", str(config["attackFirstPaddingBytes"]),
-             "--send-order", config["attackSendOrder"], "--txs-per-sender", str(config["txsPerSender"])], len(attackers) * config["txsPerSender"])
+             "--send-order", config["attackSendOrder"], "--txs-per-sender", str(config["txsPerSender"])], len(attackers) * config["txsPerSender"],
+            allow_rpc_errors=(client == "erigon"))
     else:
         (out / "attack.jsonl").write_text("")
     injection_end = rpc.height()
@@ -322,12 +357,23 @@ def run(args):
             end=block_point(rpc, attack_timing["afterBlock"], genesis_timestamp, config["secondsPerSlot"])))
     save(out / "pool_after_injection.json", dict(block=injection_end, status=rpc.call("txpool_status"),
          point=injection_point))
-    for window in (config["commonWindowBlocks"], config["fullWindowBlocks"]):
-        block = wait_block(rpc, injection_end + window, timeout=config["secondsPerSlot"] * (window + 4))
+    if client == "erigon":
+        erigon_capture(rpc, args.container, out, "T3" if args.mode == "attack" else "G0_end")
+    window_anchor = normal_anchor if client == "erigon" else injection_end
+    windows = (config["commonWindowBlocks"], config["fullWindowBlocks"])
+    if client == "erigon":
+        windows += (config["followupWindowBlocks"],)
+    for window in windows:
+        block = wait_block(rpc, window_anchor + window, timeout=config["secondsPerSlot"] * (window + 4))
+        observed = erigon_capture(rpc, args.container, out, f"window{window}") if client == "erigon" else None
+        if observed is not None:
+            block = observed["block"]
         final_senders = sender_snapshot(rpc, attackers, block)
         save(out / f"senders_window{window}.json", final_senders)
-        save(out / f"window{window}_marker.json", dict(targetBlock=injection_end + window,
-             observedBlock=block, startPoint=injection_point,
+        save(out / f"window{window}_marker.json", dict(targetBlock=window_anchor + window,
+             observedBlock=block, anchorBlock=window_anchor,
+             comparable=(block == window_anchor + window and
+                         (observed is None or observed["snapshotStable"])), startPoint=injection_point,
              endPoint=block_point(rpc, block, genesis_timestamp, config["secondsPerSlot"]),
              unixMillis=int(time.time() * 1000)))
     all_receipts = receipts(rpc, normal_records + attack_records)
@@ -356,12 +402,15 @@ def run(args):
     summary = dict(group=args.group, mode=args.mode, delegateCase=args.delegate_case,
         injectionEndBlock=injection_end, firstAttackIncludedPoint=first_attack_point, setupFeeWei=str(sum(setup_fee_by_stage.values())),
         setupFeeByStageWei={k: str(v) for k, v in setup_fee_by_stage.items()},
-        receiverBalanceDeltaWei=str(receiver_after_wei - receiver_before_wei), windows={})
-    for window in (config["commonWindowBlocks"], config["fullWindowBlocks"]):
+        receiverBalanceDeltaWei=str(receiver_after_wei - receiver_before_wei), windows={},
+        windowAnchorBlock=window_anchor, attackBroadcastOverranWindow=(client == "erigon" and args.mode == "attack" and
+             injection_end > window_anchor + config["fullWindowBlocks"]))
+    for window in windows:
         groups = {}
         for kind, records in (("normal", normal_records), ("attack", attack_records)):
-            included = [r["receipt"] for r in all_receipts if r["kind"] == kind and r["receipt"] and int(r["receipt"]["blockNumber"], 16) <= injection_end + window]
-            groups[kind] = dict(submitted=len(records), accepted=len(records), included=len(included),
+            included = [r["receipt"] for r in all_receipts if r["kind"] == kind and r["receipt"] and int(r["receipt"]["blockNumber"], 16) <= window_anchor + window]
+            groups[kind] = dict(submitted=len(records), accepted=sum(bool(r.get("hash")) and not r.get("error") for r in records),
+                rejected=sum(bool(r.get("error")) or not r.get("hash") for r in records), included=len(included),
                 successful=sum(r["status"] == "0x1" for r in included),
                 failed=sum(r["status"] != "0x1" for r in included),
                 feeWei=str(sum(fee_wei(r) for r in included)))
@@ -382,4 +431,6 @@ if __name__ == "__main__":
     p.add_argument("--key-csv", type=Path, required=True)
     p.add_argument("--funder-file", type=Path)
     p.add_argument("--seed", default="seed01")
+    p.add_argument("--client", choices=("besu", "erigon"), default="besu")
+    p.add_argument("--container", help="Erigon container ID for built-in txpool trace logs")
     run(p.parse_args())

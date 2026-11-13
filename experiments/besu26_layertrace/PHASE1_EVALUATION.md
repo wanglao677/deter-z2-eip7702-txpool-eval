@@ -43,9 +43,9 @@ G2 的委托代码不会转账，包含第一笔和全部 127 笔 tail。两组�
 
 ```bash
 cd ~/ETH/besu26-layertrace-eval
-# 旧 clone 可能使用 --single-branch，需显式获取新分支。
-git fetch origin besu26-phase1-evaluation:refs/remotes/origin/besu26-phase1-evaluation
-git switch --track origin/besu26-phase1-evaluation
+# 旧 clone 使用 --single-branch 时，也能从 FETCH_HEAD 创建本地分支。
+git fetch origin besu26-phase1-evaluation
+git switch -c besu26-phase1-evaluation FETCH_HEAD
 git pull --ff-only origin besu26-phase1-evaluation
 git rev-parse HEAD
 

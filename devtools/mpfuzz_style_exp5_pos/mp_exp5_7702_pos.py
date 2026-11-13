@@ -213,10 +213,12 @@ def fund_to_target(rpc, chain_id, accounts, args):
 def delegate_contract_spec(args):
     if args.case == "bob-trigger":
         return "Alice7702FallbackDrain.sol", "Alice7702FallbackDrain"
+    if args.case == "alice-no-drain":
+        return "Alice7702NoDrain.sol", "Alice7702NoDrain"
     return "Alice7702Drain.sol", "Alice7702Drain"
 
 
-def deploy_delegate(rpc, chain_id, accounts, args):
+def deploy_delegate(rpc, chain_id, accounts, args, include_receipt=False):
     try:
         from web3 import Web3
     except ModuleNotFoundError as exc:
@@ -233,7 +235,7 @@ def deploy_delegate(rpc, chain_id, accounts, args):
     interface = base.compile_with_solc(source, contract_name, args.solc_version, args.evm_version)
     bytecode = interface.get("bin") or interface.get("bytecode")
     if not bytecode:
-        raise RuntimeError("compiled Alice7702Drain did not include deployment bytecode")
+        raise RuntimeError(f"compiled {contract_name} did not include deployment bytecode")
     if not bytecode.startswith("0x"):
         bytecode = "0x" + bytecode
 
@@ -278,6 +280,8 @@ def deploy_delegate(rpc, chain_id, accounts, args):
         raise RuntimeError(f"{contract_name} deployment failed")
     delegate = tx.receipt["contractAddress"]
     print(f"delegate={delegate}")
+    if include_receipt:
+        return delegate, dict(kind="deploy", label=contract_name, hash=tx.hash, receipt=tx.receipt)
     return delegate
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare or run two fresh, sequential Besu 26.6.1 observation networks."""
+"""Prepare, run, or collect Besu 26.6.1 layertrace experiments."""
 import argparse
 import hashlib
 import json
@@ -14,6 +14,7 @@ from datetime import datetime
 from pathlib import Path
 
 from audit import audit
+from report import summarize_evaluation, summarize_group
 from build_image import COMMIT
 from workload import LEGACY, save, validate_funder_key
 
@@ -116,7 +117,7 @@ def prepare(args, config):
     # Never mutate an arbitrary user checkout: this package belongs to our ignored build directory.
     subprocess.run(["git", "-C", str(package), "fetch", "--depth=1", "origin", config["ethereumPackageCommit"]], check=True)
     subprocess.run(["git", "-C", str(package), "checkout", "--detach", config["ethereumPackageCommit"]], check=True)
-    manifest = dict(configSha256=sha(HERE / "config.json"), helperSourceSha256=sha(LEGACY / "eip7702_scale_helper.go"),
+    manifest = dict(configSha256=sha(args.config), helperSourceSha256=sha(LEGACY / "eip7702_scale_helper.go"),
         helperSha256=sha(helper), goVersion=output([str(args.go), "version"]),
         gethCommit=output(["git", "-C", str(args.geth_repo), "rev-parse", "HEAD"]),
         gethModuleSha256=sha(args.geth_repo / "go.mod"), imageId=image["Id"], imageLabels=image["Config"].get("Labels", {}),
@@ -158,7 +159,26 @@ def collect(enclave, out):
     return result
 
 
-def pair(args, config, helper, package, manifest):
+def evaluation_groups(config, requested):
+    expected = {
+        "G0": dict(mode="baseline", delegateCase="alice-sender"),
+        "G1": dict(mode="attack", delegateCase="alice-sender"),
+        "G2": dict(mode="attack", delegateCase="alice-no-drain"),
+    }
+    if config.get("evaluationGroups") != expected:
+        raise RuntimeError("Phase 1 requires the fixed G0/G1/G2 mode and delegate mapping")
+    if config["besuVersion"] != "26.6.1":
+        raise RuntimeError("Phase 1 requires Besu 26.6.1")
+    if not config["poolPolicy"].startswith("LAYERED release defaults"):
+        raise RuntimeError("Phase 1 requires the release-default LAYERED pool")
+    for field in ("attackFirstPaddingBytes", "attackTailPaddingBytes"):
+        if type(config[field]) is not int or config[field] < 0:
+            raise RuntimeError(f"{field} must be a non-negative byte count")
+    selected = list(expected) if requested == "all" else [requested]
+    return [(group, expected[group]["mode"], expected[group]["delegateCase"]) for group in selected]
+
+
+def run_groups(args, config, helper, package, manifest, groups, evaluation=False):
     os.umask(0o077)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     root = args.out or HERE / "runs" / (config["name"] + "_" + args.seed + "_" + stamp)
@@ -168,12 +188,13 @@ def pair(args, config, helper, package, manifest):
     save(root / "config.json", config)
     save(root / "network.json", network_config(config, args.image))
     print(f"实验目录：{root}", flush=True)
-    for mode, suffix in (("baseline", "b"), ("attack", "a")):
-        out = root / mode
+    for group, mode, delegate_case in groups:
+        out = root / group
         out.mkdir()
-        enclave = f"bz2-trace-{stamp.replace('_', '-')}-{suffix}"
+        suffix = group.lower() if evaluation else ("b" if mode == "baseline" else "a")
+        enclave = f"bz2-trace-{stamp.replace('_', '-')}-{uuid.uuid4().hex[:6]}-{suffix}"
         save(out / "network_identity.json", dict(enclave=enclave))
-        print(f"启动 {mode}：{enclave}", flush=True)
+        print(f"启动 {group}：{enclave}", flush=True)
         with (out / "network.log").open("w") as log:
             launched = subprocess.run(["kurtosis", "run", "--enclave", enclave, "--args-file", str(root / "network.json"), str(package)], stdout=log, stderr=subprocess.STDOUT)
         if launched.returncode:
@@ -181,15 +202,18 @@ def pair(args, config, helper, package, manifest):
         port = output(["kurtosis", "port", "print", "--format", "number", enclave, SERVICE, "rpc"])
         rpc = f"http://127.0.0.1:{port}"
         save(out / "network_identity.json", dict(enclave=enclave, rpc=rpc, container=container(enclave)))
-        # Fail before sending if the observer failed to initialize.
         for attempt in range(30):
             if subprocess.run(["docker", "exec", container(enclave), "test", "-s", TRACE]).returncode == 0:
                 break
             time.sleep(1)
         else:
             raise RuntimeError("Observer did not initialize; no workload submitted")
-        command = [sys.executable, "-u", str(HERE / "workload.py"), "--mode", mode, "--rpc", rpc,
-                   "--out", str(out), "--helper", str(helper), "--key-csv", str(args.key_csv), "--seed", args.seed]
+        command = [sys.executable, "-u", str(HERE / "workload.py"), "--mode", mode,
+                   "--delegate-case", delegate_case, "--config", str(root / "config.json"),
+                   "--rpc", rpc, "--out", str(out), "--helper", str(helper),
+                   "--key-csv", str(args.key_csv), "--seed", args.seed]
+        if evaluation:
+            command += ["--group", group]
         with (out / "run.log").open("w") as log:
             with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as process:
                 for line in process.stdout:
@@ -197,23 +221,40 @@ def pair(args, config, helper, package, manifest):
                     log.write(line)
                     log.flush()
                 code = process.wait()
-        time.sleep(2)  # Allow the asynchronous observer to flush a checkpoint.
+        time.sleep(2)
         result = collect(enclave, out)
         if code:
             raise RuntimeError(f"Workload failed. Evidence saved in {out}; enclave preserved for diagnosis")
         marker = json.loads((out / f"window{config['fullWindowBlocks']}_marker.json").read_text())
         if not result["evidenceComplete"] or result["checkpoint"].get("unixMillis", 0) < marker["unixMillis"]:
             raise RuntimeError(f"Layer trace incomplete/stale; inspect {out / 'layer_audit.json'}; enclave preserved")
-        # Stop only the enclave created by this invocation, after all evidence has been copied.
+        if evaluation:
+            summarize_group(out)
+            summarize_evaluation(root)
         subprocess.run(["kurtosis", "enclave", "stop", enclave], check=True)
-    save(root / "pair_summary.json", {mode: json.loads((root / mode / "summary.json").read_text()) for mode in ("baseline", "attack")})
-    print(f"完成配对观测：{root}", flush=True)
+    if evaluation:
+        print(f"完成 Phase 1 评估：{root}", flush=True)
+    else:
+        save(root / "pair_summary.json", {mode: json.loads((root / mode / "summary.json").read_text()) for mode in ("baseline", "attack")})
+        print(f"完成配对观测：{root}", flush=True)
+
+
+def pair(args, config, helper, package, manifest):
+    run_groups(args, config, helper, package, manifest,
+               [("baseline", "baseline", "alice-sender"), ("attack", "attack", "alice-sender")])
+
+
+def evaluation(args, config, helper, package, manifest):
+    run_groups(args, config, helper, package, manifest,
+               evaluation_groups(config, args.group), evaluation=True)
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("plan", "prepare", "pair", "collect"))
+    p.add_argument("action", choices=("plan", "prepare", "pair", "evaluation", "collect"))
     p.add_argument("--seed", default="seed01")
+    p.add_argument("--config", type=Path, default=HERE / "config.json")
+    p.add_argument("--group", choices=("G0", "G1", "G2", "all"), default="all")
     p.add_argument("--image", default="besu:26.6.1-layertrace")
     p.add_argument("--geth-repo", type=Path, default=Path.home() / "ETH/pos-exp/go-ethereum-pos")
     p.add_argument("--go", type=Path, default=Path("/usr/local/go/bin/go"))
@@ -221,7 +262,10 @@ def main():
     p.add_argument("--out", type=Path)
     p.add_argument("--enclave")
     args = p.parse_args()
-    config = json.loads((HERE / "config.json").read_text())
+    args.config = args.config.resolve()
+    config = json.loads(args.config.read_text())
+    if args.action == "evaluation":
+        evaluation_groups(config, args.group)
     if args.action == "plan":
         print(json.dumps(dict(config=config, network=network_config(config, args.image)), indent=2))
         return
@@ -234,6 +278,8 @@ def main():
     helper, package, manifest = prepare(args, config)
     if args.action == "prepare":
         print("准备完成：依赖、helper、固定版本镜像和网络配置已检查；未启动网络。")
+    elif args.action == "evaluation":
+        evaluation(args, config, helper, package, manifest)
     else:
         pair(args, config, helper, package, manifest)
 

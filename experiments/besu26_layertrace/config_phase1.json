@@ -1,0 +1,42 @@
+{
+  "name": "besu26-layertrace-phase1-first0-tail8k",
+  "besuVersion": "26.6.1",
+  "secondsPerSlot": 300,
+  "normalSenders": 55,
+  "attackSenders": 125,
+  "txsPerSender": 128,
+  "normalPaddingBytes": 8192,
+  "attackFirstPaddingBytes": 0,
+  "attackTailPaddingBytes": 8192,
+  "normalGas": 150000,
+  "attackGas": 500000,
+  "priceUnitWei": 571428571428,
+  "normalPriceMultiplier": 3,
+  "attackPriceMultiplier": 7,
+  "setupGasPriceWei": 1000000000,
+  "normalFundEth": 50,
+  "attackFundEth": 300,
+  "setupBatchSize": 100,
+  "commonWindowBlocks": 1,
+  "fullWindowBlocks": 10,
+  "normalSendOrder": "account",
+  "attackSendOrder": "round-robin",
+  "rpcTxFeeCapEth": 5,
+  "poolPolicy": "LAYERED release defaults; no capacity/comparator/balance-check overrides",
+  "ethereumPackageCommit": "c4a8e15d40f0965f3728f776d72f1954440ad96b",
+  "lighthouseImage": "sigp/lighthouse@sha256:44aa773dcf274122c32cc41c4dae7124ed3cab5c267ee82174c6dfd9c688da96",
+  "evaluationGroups": {
+    "G0": {
+      "mode": "baseline",
+      "delegateCase": "alice-sender"
+    },
+    "G1": {
+      "mode": "attack",
+      "delegateCase": "alice-sender"
+    },
+    "G2": {
+      "mode": "attack",
+      "delegateCase": "alice-no-drain"
+    }
+  }
+}

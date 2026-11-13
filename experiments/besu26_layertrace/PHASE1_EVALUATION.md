@@ -21,7 +21,11 @@ Ubuntu 机器的私有 Kurtosis devnet 执行。
 | 每个攻击 sender 初始注资 | 300 ETH | 300 ETH | 300 ETH |
 | 广播顺序 | normal 按账户 | normal 后 attack；attack round-robin | 同 G1 |
 
-每个正常 sender 注资 50 ETH。normal gas limit 150,000，attack gas limit 500,000；
+三组各自在 genesis 给同一个新建的本地 devnet 出资地址预置 100,000 ETH；
+其私钥仅在 Ubuntu 本机的被 Git 忽略文件中，网络配置和结果只记录地址。
+与旧的 original8k 运行相比，出资账户和 genesis 余额不同，不能把旧轮当作
+这三组的严格基线。每个正常 sender 注资 50 ETH。normal gas limit 150,000，
+attack gas limit 500,000；
 价格单位为 571,428,571,428 wei，normal ×3，attack ×7；setup 价格为 1 gwei。
 G1/G2 的第一笔和 tail 都广播相同的 `drainAll(address)` 调用数据，且 value=0。
 G2 的委托代码不会转账，包含第一笔和全部 127 笔 tail。两组委托代码的执行 gas
@@ -36,8 +40,8 @@ G2 的委托代码不会转账，包含第一笔和全部 127 笔 tail。两组�
 ## Ubuntu 准备
 
 需要 Docker（当前用户可运行 `docker ps`）、Kurtosis、Git、Go、Python 3、
-现有完整 geth 工作区及其虚拟环境、本地 devnet key CSV，以及只在当前终端设置的
-`EXP5_FUNDER_PRIVATE_KEY`。CSV 只供应 a/x 账户；出资账户的 key 不在 GitHub。
+现有完整 geth 工作区及其虚拟环境，以及本地 devnet key CSV。CSV 只供应 a/x 账户；
+Phase 1 出资账户由 `init-funder` 在 Ubuntu 本机随机生成，不需要旧的 funded0 私钥。
 安装说明和现有 PoC 背景见 [README.md](README.md)。远程 Ubuntu 的默认路径为
 `$HOME/ETH/pos-exp/go-ethereum-pos`；路径不同请用 `--geth-repo` 和 `--key-csv`。
 
@@ -45,32 +49,35 @@ G2 的委托代码不会转账，包含第一笔和全部 127 笔 tail。两组�
 cd ~/ETH/besu26-layertrace-eval
 # 旧 clone 使用 --single-branch 时，也能从 FETCH_HEAD 创建本地分支。
 git fetch origin besu26-phase1-evaluation
-git switch -c besu26-phase1-evaluation FETCH_HEAD
-git pull --ff-only origin besu26-phase1-evaluation
+git switch besu26-phase1-evaluation 2>/dev/null || git switch -c besu26-phase1-evaluation FETCH_HEAD
+git merge --ff-only FETCH_HEAD
 git rev-parse HEAD
 
 source ~/ETH/pos-exp/go-ethereum-pos/.venv-exp5/bin/activate
 python -m pip install web3 py-solc-x
 python -c "import solcx; solcx.install_solc('0.8.20')"
 
-# 在本机当前 shell 输入 funded0 私钥；输入不回显，也不要贴到聊天或日志。
-read -rsp 'funded0 devnet private key: ' EXP5_FUNDER_PRIVATE_KEY; printf '\n'
-export EXP5_FUNDER_PRIVATE_KEY
+CFG=experiments/besu26_layertrace/config_phase1.json
+python experiments/besu26_layertrace/run.py init-funder --config "$CFG"
+python experiments/besu26_layertrace/run.py plan --config "$CFG"
 
 python experiments/besu26_layertrace/build_image.py
 python experiments/besu26_layertrace/verify.py
 python -m unittest discover -s experiments/besu26_layertrace/tests -v
 
-CFG=experiments/besu26_layertrace/config_phase1.json
-python experiments/besu26_layertrace/run.py plan --config "$CFG"
 python experiments/besu26_layertrace/run.py prepare --config "$CFG"
 ```
 
 `build_image.py` 构建固定 Besu 26.6.1 观测镜像；
 `verify.py` 是小型内存池检查，不代表正式 PoS 评估。
-`prepare` 检查实际镜像版本/CLI、密钥和依赖并编译 Go helper，不启动网络。
+`init-funder` 只生成或复用本机 `.build/phase1_funder.json`，权限为 0600；
+它只打印地址，不打印私钥。`.build/` 已被 Git 忽略。不要复制、提交或发送该文件。
+删除该文件会生成不同地址，需重新运行 `init-funder` 和 `prepare`；
+同一轮 G0/G1/G2 必须使用同一文件。`prepare` 检查实际镜像版本/CLI、
+出资文件、依赖并编译 Go helper，不启动网络。
 `plan` 输出应包含 `besuVersion: 26.6.1`、`attackFirstPaddingBytes: 0`、
-`attackTailPaddingBytes: 8192` 和 G0/G1/G2。实际节点版本写入每组
+`attackTailPaddingBytes: 8192`、`prefunded_accounts` 中只含新地址与
+`100000ETH`，以及 G0/G1/G2。实际节点版本写入每组
 `workload_manifest.json` 的 `clientVersion`；必须以 `besu/v26.6.1/` 开头。
 
 ## 运行
@@ -84,8 +91,8 @@ CFG=experiments/besu26_layertrace/config_phase1.json
 python -u experiments/besu26_layertrace/run.py evaluation --config "$CFG" --group all --seed seed01
 ```
 
-也可分别执行各组，每条命令都会创建独立的结果目录和网络；从别的 shell 执行时，
-要重新在该 shell 设置 `EXP5_FUNDER_PRIVATE_KEY`：
+也可分别执行各组，每条命令都会创建独立的结果目录和网络；
+从别的 shell 执行时使用同一个 `.build/phase1_funder.json`，无需设置密钥环境变量：
 
 ```bash
 python -u experiments/besu26_layertrace/run.py evaluation --config "$CFG" --group G0 --seed seed01

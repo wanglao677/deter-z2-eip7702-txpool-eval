@@ -16,6 +16,7 @@ from pathlib import Path
 from audit import audit
 from report import summarize_evaluation, summarize_group
 from build_image import COMMIT
+from funder import create_funder, load_funder
 from workload import LEGACY, save, validate_funder_key
 
 HERE = Path(__file__).resolve().parent
@@ -53,14 +54,23 @@ def rpc_tx_fee_cap_wei(config):
     return cap_wei
 
 
-def network_config(config, image):
+def network_config(config, image, funder_address=None):
     fee_cap_wei = rpc_tx_fee_cap_wei(config)
+    network_params = dict(network_id="13371349", seconds_per_slot=config["secondsPerSlot"])
+    if config.get("evaluationGroups"):
+        if not funder_address:
+            raise RuntimeError("Phase 1 needs a local devnet funder; run init-funder first")
+        balance = config.get("funderGenesisBalanceEth")
+        minimum = config["normalSenders"] * config["normalFundEth"] + config["attackSenders"] * config["attackFundEth"] + 1
+        if type(balance) is not int or balance < minimum:
+            raise RuntimeError("funderGenesisBalanceEth must cover all setup funding plus a gas reserve")
+        network_params["prefunded_accounts"] = {funder_address: {"balance": f"{balance}ETH"}}
     # JSON is valid YAML, so no additional YAML dependency is required.
     return dict(participants=[dict(el_type="besu", el_image=image, cl_type="lighthouse",
         cl_image=config["lighthouseImage"], count=1,
         el_extra_env_vars={"BESU_LAYER_TRACE_FILE": TRACE},
         el_extra_params=["--tx-pool=LAYERED", "--rpc-tx-feecap=" + str(fee_cap_wei)])],
-        network_params=dict(network_id="13371349", seconds_per_slot=config["secondsPerSlot"]), additional_services=[])
+        network_params=network_params, additional_services=[])
 
 
 def validate_besu_cli(image, params, version):
@@ -86,7 +96,10 @@ def validate_besu_cli(image, params, version):
 
 
 def prepare(args, config):
-    network = network_config(config, args.image)
+    network = network_config(config, args.image, getattr(args, "funder_address", None))
+    if config.get("evaluationGroups"):
+        if load_funder(args.funder_file)["address"] != args.funder_address:
+            raise RuntimeError("Phase 1 funder changed; rerun init-funder and plan")
     for tool in ("docker", "git", "kurtosis"):
         if not shutil.which(tool):
             raise RuntimeError(f"Missing command: {tool}")
@@ -107,7 +120,8 @@ def prepare(args, config):
         raise RuntimeError(f"Missing geth Go module: {args.geth_repo}")
     if not args.key_csv.is_file():
         raise RuntimeError(f"Missing local test key CSV: {args.key_csv}")
-    validate_funder_key()
+    if not config.get("evaluationGroups"):
+        validate_funder_key()
     BUILD.mkdir(parents=True, exist_ok=True)
     helper = BUILD / "eip7702_scale_helper"
     subprocess.run([str(args.go), "build", "-o", str(helper), str(LEGACY / "eip7702_scale_helper.go")], cwd=args.geth_repo, check=True)
@@ -186,7 +200,7 @@ def run_groups(args, config, helper, package, manifest, groups, evaluation=False
     root.mkdir(parents=True, exist_ok=False)
     save(root / "runtime_manifest.json", manifest)
     save(root / "config.json", config)
-    save(root / "network.json", network_config(config, args.image))
+    save(root / "network.json", network_config(config, args.image, args.funder_address))
     print(f"实验目录：{root}", flush=True)
     for group, mode, delegate_case in groups:
         out = root / group
@@ -213,7 +227,7 @@ def run_groups(args, config, helper, package, manifest, groups, evaluation=False
                    "--rpc", rpc, "--out", str(out), "--helper", str(helper),
                    "--key-csv", str(args.key_csv), "--seed", args.seed]
         if evaluation:
-            command += ["--group", group]
+            command += ["--group", group, "--funder-file", str(args.funder_file)]
         with (out / "run.log").open("w") as log:
             with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as process:
                 for line in process.stdout:
@@ -251,7 +265,7 @@ def evaluation(args, config, helper, package, manifest):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("action", choices=("plan", "prepare", "pair", "evaluation", "collect"))
+    p.add_argument("action", choices=("init-funder", "plan", "prepare", "pair", "evaluation", "collect"))
     p.add_argument("--seed", default="seed01")
     p.add_argument("--config", type=Path, default=HERE / "config.json")
     p.add_argument("--group", choices=("G0", "G1", "G2", "all"), default="all")
@@ -264,10 +278,21 @@ def main():
     args = p.parse_args()
     args.config = args.config.resolve()
     config = json.loads(args.config.read_text())
+    phase1 = bool(config.get("evaluationGroups"))
+    args.funder_file = BUILD / "phase1_funder.json" if phase1 else None
+    args.funder_address = None
+    if args.action == "init-funder":
+        evaluation_groups(config, "all")
+        print("Local Phase 1 devnet funder address:", create_funder(args.funder_file))
+        return
     if args.action == "evaluation":
         evaluation_groups(config, args.group)
+    if args.action == "pair" and phase1:
+        p.error("Phase 1 config requires the evaluation action")
+    if phase1 and args.action != "collect":
+        args.funder_address = load_funder(args.funder_file)["address"]
     if args.action == "plan":
-        print(json.dumps(dict(config=config, network=network_config(config, args.image)), indent=2))
+        print(json.dumps(dict(config=config, network=network_config(config, args.image, args.funder_address)), indent=2))
         return
     if args.action == "collect":
         if not args.enclave or not args.out:

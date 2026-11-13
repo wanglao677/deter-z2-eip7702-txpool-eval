@@ -16,6 +16,7 @@ sys.path.insert(0, str(LEGACY))
 import mp_exp5_pos as base
 import mp_exp5_7702_pos as delegate_tools
 import mp_exp5_7702_scale_pos as scale
+from funder import load_funder
 
 
 def validate_funder_key():
@@ -205,8 +206,15 @@ def first_attack_balances(rpc, records, receipt_rows, setup_rows, final_rows):
 
 def run(args):
     os.umask(0o077)
-    validate_funder_key()
     config = json.loads(args.config.read_text())
+    if config.get("evaluationGroups"):
+        if not args.funder_file:
+            raise RuntimeError("Phase 1 workload requires the local devnet funder file")
+        base.DEFAULT_FUNDER.update(load_funder(args.funder_file))
+    else:
+        if args.funder_file:
+            raise RuntimeError("Historical workload cannot use the Phase 1 funder file")
+        validate_funder_key()
     out = args.out.resolve()
     if (out / "workload_manifest.json").exists():
         raise RuntimeError("This output already contains a workload; use a fresh network and directory")
@@ -221,6 +229,11 @@ def run(args):
         raise RuntimeError("Expected the generated local devnet chain ID 13371349")
     accounts = base.load_key_csv(args.key_csv)
     funder = accounts[base.DEFAULT_FUNDER["label"]]
+    if config.get("evaluationGroups"):
+        expected = config["funderGenesisBalanceEth"] * 10**18
+        actual = int(rpc.call("eth_getBalance", [funder["address"], "0x0"]), 16)
+        if actual != expected:
+            raise RuntimeError("Phase 1 funder genesis balance does not match the plan; no workload submitted")
     normal = scale.derive_accounts("n", config["normalSenders"], args.seed + ":besu")
     attackers = scale.derive_accounts("a", config["attackSenders"], args.seed + ":besu")
     total_funding = (config["normalSenders"] * config["normalFundEth"] + config["attackSenders"] * config["attackFundEth"]) * 10**18
@@ -231,6 +244,7 @@ def run(args):
     save(out / "workload_manifest.json", dict(config=config, group=args.group, mode=args.mode,
          delegateCase=args.delegate_case, seed=args.seed, rpc=args.rpc,
          clientVersion=version, chainId=chain_id, genesis=genesis,
+         funderAddress=funder["address"],
          accounts=[{k: a[k] for k in ("label", "address")} for a in normal + attackers]))
     wait_block(rpc, rpc.height() + 1)
     setup_price = str(config["setupGasPriceWei"])
@@ -354,5 +368,6 @@ if __name__ == "__main__":
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--helper", type=Path, required=True)
     p.add_argument("--key-csv", type=Path, required=True)
+    p.add_argument("--funder-file", type=Path)
     p.add_argument("--seed", default="seed01")
     run(p.parse_args())

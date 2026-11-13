@@ -1,16 +1,21 @@
 import csv
+import io
 import json
+import stat
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
+from funder import create_funder, load_funder
 from report import classify, summarize_evaluation, summarize_group
-from run import evaluation_groups, network_config
+from run import evaluation_groups, main, network_config
 from workload import delegate_tools
 
 
@@ -39,8 +44,61 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual(new["attackSenders"] * new["txsPerSender"], 16000)
         self.assertEqual([g[0] for g in evaluation_groups(new, "all")], ["G0", "G1", "G2"])
         self.assertEqual(evaluation_groups(new, "G2")[0][2], "alice-no-drain")
-        self.assertEqual(network_config(old, "image")["participants"][0]["el_extra_params"],
-                         network_config(new, "image")["participants"][0]["el_extra_params"])
+        address = "0x" + "12" * 20
+        old_network = network_config(old, "image")
+        new_network = network_config(new, "image", address)
+        self.assertEqual(old_network["participants"][0]["el_extra_params"],
+                         new_network["participants"][0]["el_extra_params"])
+        self.assertNotIn("prefunded_accounts", old_network["network_params"])
+        self.assertEqual(new_network["network_params"]["prefunded_accounts"],
+                         {address: {"balance": "100000ETH"}})
+        self.assertNotIn("private_key", json.dumps(new_network))
+
+    def test_local_funder_is_private_stable_and_required(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "build" / "phase1_funder.json"
+            with self.assertRaisesRegex(RuntimeError, "init-funder"):
+                load_funder(path)
+            address = create_funder(path)
+            self.assertEqual(create_funder(path), address)
+            self.assertEqual(load_funder(path)["address"], address)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            path.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, "chmod 600"):
+                load_funder(path)
+            path.chmod(0o600)
+            record = json.loads(path.read_text())
+            record["address"] = "0x" + "00" * 20
+            write_json(path, record)
+            with self.assertRaisesRegex(RuntimeError, "invalid"):
+                load_funder(path)
+
+    def test_cli_init_and_plan_share_private_local_funder(self):
+        with tempfile.TemporaryDirectory() as temp:
+            build = Path(temp)
+            cfg = HERE / "config_phase1.json"
+            captured = io.StringIO()
+            with patch("run.BUILD", build):
+                with patch.object(sys, "argv", ["run.py", "init-funder", "--config", str(cfg)]):
+                    with redirect_stdout(captured):
+                        main()
+                funder = load_funder(build / "phase1_funder.json")
+                self.assertIn(funder["address"], captured.getvalue())
+                self.assertNotIn(funder["private_key"], captured.getvalue())
+                captured = io.StringIO()
+                with patch.object(sys, "argv", ["run.py", "plan", "--config", str(cfg)]):
+                    with redirect_stdout(captured):
+                        main()
+                plan = json.loads(captured.getvalue())
+                self.assertEqual(plan["network"]["network_params"]["prefunded_accounts"],
+                                 {funder["address"]: {"balance": "100000ETH"}})
+                self.assertNotIn(funder["private_key"], captured.getvalue())
+
+    def test_phase1_genesis_funding_must_cover_setup(self):
+        config = self.config()
+        config["funderGenesisBalanceEth"] = 1
+        with self.assertRaisesRegex(RuntimeError, "cover all setup funding"):
+            network_config(config, "image", "0x" + "12" * 20)
 
     def test_control_delegation_matches_selector_without_value_transfer(self):
         drain = (HERE.parents[1] / "devtools/mpfuzz_style_exp5_pos/Alice7702Drain.sol").read_text()

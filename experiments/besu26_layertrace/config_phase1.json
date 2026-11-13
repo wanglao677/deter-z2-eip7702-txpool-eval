@@ -38,5 +38,6 @@
       "mode": "attack",
       "delegateCase": "alice-no-drain"
     }
-  }
+  },
+  "funderGenesisBalanceEth": 100000
 }

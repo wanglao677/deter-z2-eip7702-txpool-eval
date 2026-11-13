@@ -281,6 +281,13 @@ def summarize_group(folder):
     return result
 
 
+def drain_cost_comparable(rows):
+    if not all(group in rows and rows[group]["comparable"] for group in ("G1", "G2")):
+        return False
+    return all(rows["G1"][key] == rows["G2"][key] for key in
+               ("normalAdmitted", "normalCapacityEvicted", "normalIncluded", "normalUnknown"))
+
+
 def summarize_evaluation(root):
     root = Path(root)
     groups = {group: load_json(root / group / "erigon_summary.json") for group in ("G0", "G1", "G2")
@@ -309,6 +316,7 @@ def summarize_evaluation(root):
                                  comparable=row["windowComparable"] and not item["attackBroadcastOverranWindow"])
     result = dict(client="erigon", groups=comparison,
                   sameNormalFeeSequence=len(hashes) <= 1,
-                  drainCostComparisonValid=all(g in comparison and comparison[g]["comparable"] for g in ("G1", "G2")))
+                  drainCostComparisonValid=drain_cost_comparable(comparison),
+                  drainCostComparisonRule="both windows aligned, equal normal admitted, capacity evicted, included and unknown")
     save_json(root / "erigon_evaluation_summary.json", result)
     return result

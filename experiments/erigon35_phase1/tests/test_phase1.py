@@ -10,7 +10,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 from run import network_config, validate, GROUPS
-from report import classify, parse_trace, summarize_group, summarize_evaluation
+from report import classify, drain_cost_comparable, parse_trace, summarize_group, summarize_evaluation
 BESU = HERE.parent / "besu26_layertrace"
 sys.path.insert(1, str(BESU))
 from normal_fee import plan, sequence_sha256
@@ -124,6 +124,14 @@ class TraceTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_drain_cost_gate_requires_matched_eviction_and_windows(self):
+        groups = {"G1": dict(comparable=True, normalAdmitted=7040, normalCapacityEvicted=7000, normalIncluded=40, normalUnknown=0),
+                  "G2": dict(comparable=True, normalAdmitted=7040, normalCapacityEvicted=7000, normalIncluded=40, normalUnknown=0)}
+        self.assertTrue(drain_cost_comparable(groups))
+        self.assertFalse(drain_cost_comparable({"G1": groups["G1"]}))
+        self.assertFalse(drain_cost_comparable(dict(groups, G2=dict(groups["G2"], normalCapacityEvicted=6900))))
+        self.assertFalse(drain_cost_comparable(dict(groups, G2=dict(groups["G2"], comparable=False))))
+
     def test_synthetic_csv_json_conservation_and_cost(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

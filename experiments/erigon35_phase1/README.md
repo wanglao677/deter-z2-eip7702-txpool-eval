@@ -80,7 +80,7 @@ python -u experiments/erigon35_phase1/run.py evaluation --config "$CFG" --group 
 python -u experiments/erigon35_phase1/run.py evaluation --config "$CFG" --group G2 --seed seed01 --go "$(command -v go)"
 ~~~
 
-Each individual command creates its own root; the automatic matched comparison is produced by --group all. Do not run multiple commands on one terminal at once.
+Each individual command creates its own root; the automatic matched comparison is produced by --group all. Do not run multiple commands on one terminal at once. The drainCostComparisonValid flag is true only if G1 and G2 both have aligned windows, equal normal admitted, capacity-evicted, included, and unknown counts. If false, inspect the separate costs but do not claim a matched cost advantage.
 
 ## Randomized normal fee mode
 

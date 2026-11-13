@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -50,9 +51,18 @@ class Phase1Tests(unittest.TestCase):
         self.assertEqual(old_network["participants"][0]["el_extra_params"],
                          new_network["participants"][0]["el_extra_params"])
         self.assertNotIn("prefunded_accounts", old_network["network_params"])
-        self.assertEqual(new_network["network_params"]["prefunded_accounts"],
+        self.assertEqual(json.loads(new_network["network_params"]["prefunded_accounts"]),
                          {address: {"balance": "100000ETH"}})
         self.assertNotIn("private_key", json.dumps(new_network))
+
+    def test_prefunding_survives_pinned_package_shell_export(self):
+        address = "0x" + "12" * 20
+        prefunded = network_config(self.config(), "image", address)["network_params"]["prefunded_accounts"]
+        # ethereum-package renders: export EL_PREMINE_ADDRS={{ json.encode(prefunded_accounts) }}
+        assignment = "export EL_PREMINE_ADDRS=" + json.dumps(prefunded)
+        result = subprocess.run(["bash", "-c", assignment + '; printf "%s" "$EL_PREMINE_ADDRS"'],
+                                capture_output=True, text=True, check=True)
+        self.assertEqual(json.loads(result.stdout), {address: {"balance": "100000ETH"}})
 
     def test_local_funder_is_private_stable_and_required(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -90,7 +100,7 @@ class Phase1Tests(unittest.TestCase):
                     with redirect_stdout(captured):
                         main()
                 plan = json.loads(captured.getvalue())
-                self.assertEqual(plan["network"]["network_params"]["prefunded_accounts"],
+                self.assertEqual(json.loads(plan["network"]["network_params"]["prefunded_accounts"]),
                                  {funder["address"]: {"balance": "100000ETH"}})
                 self.assertNotIn(funder["private_key"], captured.getvalue())
 

@@ -64,7 +64,10 @@ def network_config(config, image, funder_address=None):
         minimum = config["normalSenders"] * config["normalFundEth"] + config["attackSenders"] * config["attackFundEth"] + 1
         if type(balance) is not int or balance < minimum:
             raise RuntimeError("funderGenesisBalanceEth must cover all setup funding plus a gas reserve")
-        network_params["prefunded_accounts"] = {funder_address: {"balance": f"{balance}ETH"}}
+        # The pinned package json.encodes this field into an unquoted shell export.
+        # It must be a JSON string: a map loses its inner quotes in the shell.
+        network_params["prefunded_accounts"] = json.dumps(
+            {funder_address: {"balance": f"{balance}ETH"}}, separators=(",", ":"))
     # JSON is valid YAML, so no additional YAML dependency is required.
     return dict(participants=[dict(el_type="besu", el_image=image, cl_type="lighthouse",
         cl_image=config["lighthouseImage"], count=1,

@@ -76,7 +76,7 @@ python experiments/besu26_layertrace/run.py prepare --config "$CFG"
 同一轮 G0/G1/G2 必须使用同一文件。`prepare` 检查实际镜像版本/CLI、
 出资文件、依赖并编译 Go helper，不启动网络。
 `plan` 输出应包含 `besuVersion: 26.6.1`、`attackFirstPaddingBytes: 0`、
-`attackTailPaddingBytes: 8192`、`prefunded_accounts` 中只含新地址与
+`attackTailPaddingBytes: 8192`、`prefunded_accounts` 的 JSON 字符串中只含新地址与
 `100000ETH`，以及 G0/G1/G2。实际节点版本写入每组
 `workload_manifest.json` 的 `clientVersion`；必须以 `besu/v26.6.1/` 开头。
 

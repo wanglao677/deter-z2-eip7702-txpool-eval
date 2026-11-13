@@ -43,8 +43,9 @@ G2 的委托代码不会转账，包含第一笔和全部 127 笔 tail。两组�
 
 ```bash
 cd ~/ETH/besu26-layertrace-eval
-git fetch origin
-git switch besu26-phase1-evaluation
+# 旧 clone 可能使用 --single-branch，需显式获取新分支。
+git fetch origin besu26-phase1-evaluation:refs/remotes/origin/besu26-phase1-evaluation
+git switch --track origin/besu26-phase1-evaluation
 git pull --ff-only origin besu26-phase1-evaluation
 git rev-parse HEAD
 
@@ -124,7 +125,8 @@ python -u experiments/besu26_layertrace/run.py evaluation --config "$CFG" --grou
 不能声称它是单笔交易执行瞬间的精确后余额。
 
 `capacity_choice` 与最终 `POOL_DROPPED` 对应，且观测器无丢事件和 checkpoint
-已越过观察窗口时，才计入 `normalCapacityEvictedConfirmed`。
+已越过观察窗口时，才计入 `normalCapacityEvictedConfirmed`；`normalCapacityEvictedByFullWindow`
+仅计算在第 10 个观察区块标记之前发生的最终容量驱逐。
 `leave scope=LAYER` 只算移层；`REMOVED_INVALIDATED`、确认上链、
 RPC 拒绝、未观察到的状态分别列出。`poolBlockNumber` 只是池处理区块的上下文，
 第一笔攻击上链高度来自 canonical receipt。Slot 从执行区块时间推导，未独立调用

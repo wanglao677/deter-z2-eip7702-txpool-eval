@@ -15,6 +15,7 @@ HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 
 from funder import create_funder, load_funder
+from normal_fee import bins as normal_fee_bins
 from report import classify, summarize_evaluation, summarize_group
 from run import evaluation_groups, main, network_config
 from workload import delegate_tools
@@ -209,6 +210,40 @@ class Phase1Tests(unittest.TestCase):
             self.assertEqual(table[0]["attackGasFeeWei"], "85")
             self.assertEqual(table[0]["firstAttackIncluded"], 1)
             self.assertEqual(table[0]["tailAttackIncluded"], 1)
+            self.assertEqual(result["normalFeeStats"]["minGwei"], result["normalFeeStats"]["maxGwei"])
+            self.assertEqual(result["normalFeeBins"][0]["normalAccepted"], 4)
+
+            random_config = json.loads((HERE / "config_phase1_random_fee.json").read_text())
+            fee_intervals = normal_fee_bins(random_config)
+            for record, interval in zip(normal, fee_intervals):
+                record["gasPriceWei"] = str((interval["lowerWei"] + interval["upperExclusiveWei"] - 1) // 2)
+            (group / "normal.jsonl").write_text("".join(json.dumps(r) + "\n" for r in normal))
+            manifest = json.loads((group / "workload_manifest.json").read_text())
+            manifest["config"] = random_config
+            write_json(group / "workload_manifest.json", manifest)
+            write_json(root / "config.json", random_config)
+            random_result = summarize_group(group)
+            self.assertEqual(random_result["normalGasPriceMode"], "randomized-uniform")
+            self.assertNotEqual(random_result["normalFeeStats"]["minGwei"], random_result["normalFeeStats"]["maxGwei"])
+            self.assertEqual(random_result["normalFeeBins"][0]["evictionRate"], "1.000000")
+            self.assertEqual(random_result["normalFeeBins"][0]["evictionRateByFullWindow"], "1.000000")
+            self.assertEqual(random_result["normalFeeBins"][2]["includedPaidFeeWei"], "10")
+            with (group / "tx_outcomes.csv").open(newline="") as handle:
+                normal_included = next(row for row in csv.DictReader(handle) if row["label"] == "n2")
+            self.assertEqual(normal_included["feeWei"], "10")
+            self.assertEqual(normal_included["effectiveGasPriceWei"], "1")
+            self.assertEqual(normal_included["signedGasPriceWei"], normal[2]["gasPriceWei"])
+            random_table = summarize_evaluation(root)
+            self.assertEqual(random_table[0]["normalGasPriceMode"], "randomized-uniform")
+            self.assertEqual(random_table[0]["normalGasPriceP90Gwei"], random_result["normalFeeStats"]["p90Gwei"])
+
+            receipt_rows = json.loads((group / "receipts.json").read_text())
+            receipt_rows[0]["receipt"]["type"] = "0x2"
+            write_json(group / "receipts.json", receipt_rows)
+            with self.assertRaisesRegex(RuntimeError, "receipt type differs"):
+                summarize_group(group)
+            receipt_rows[0]["receipt"].pop("type")
+            write_json(group / "receipts.json", receipt_rows)
             audit = json.loads((group / "layer_audit.json").read_text())
             audit["checkpoint"]["unixMillis"] = 100
             write_json(group / "layer_audit.json", audit)

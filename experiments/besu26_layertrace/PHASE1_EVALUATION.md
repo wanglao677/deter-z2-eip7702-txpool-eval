@@ -163,3 +163,51 @@ cat "$RUN/evaluation_summary.csv"
 
 本分支只准备 Phase 1 代码。单元测试、编译、`verify.py` 都不是 G0/G1/G2
 正式运行结果。观测器有潜在 CPU/磁盘影响；本轮不测 12 秒 slot、P2P 传播或新版 Besu。
+
+## 可选的 Normal 随机费用模式
+
+固定费用的 config_phase1.json 保持原样。独立的
+config_phase1_random_fee.json 只改变 normal 的报价方式和实验目录名称；
+G0、G1、G2、Besu 版本、slot、发送顺序、normal gas limit 150,000、
+attack gas price 及 first/tail padding 均沿用固定费用配置。
+
+normal 是 Go helper 签名的 legacy type-0 交易，每笔包含 gasPrice；
+其中心价格为 1,714,285,714,284 Wei（约 1,714.29 Gwei）。
+随机模式用固定种子 besu26-phase1-normal-fee-v1 对每笔独立抽样，
+在中心价格 ±10% 的整数 Wei 范围内均匀分布。
+生成器是有版本标识的 SHA-256 拒绝采样；同一配置产生完全相同的
+逐笔价格序列。命令的 --seed seed01/seed02 仍控制账户分配；
+normal 费用随机种子单独固定，因此跨 G0/G1/G2 以及不同账户 seed
+都可复用同一报价序列。比较不同账户 seed 的实验时，应分别成组评价。
+
+Ubuntu 运行随机费用三组时，沿用上面的镜像、依赖、本地 funder 和
+prepare 步骤，只将 CFG 设置为新文件，使用全新的结果目录：
+
+    cd ~/ETH/besu26-layertrace-eval
+    source ~/ETH/pos-exp/go-ethereum-pos/.venv-exp5/bin/activate
+    CFG=experiments/besu26_layertrace/config_phase1_random_fee.json
+    python experiments/besu26_layertrace/run.py plan --config "$CFG"
+    python experiments/besu26_layertrace/run.py prepare --config "$CFG"
+    python -u experiments/besu26_layertrace/run.py evaluation --config "$CFG" --group all --seed seed01
+
+每组的 normal_fee_plan.csv 包含广播顺序、label、sender、nonce 和签名报价；
+normal_fee_prices.txt 是传给 Go helper 的逐笔价格列表。
+normal_fee_plan.json 包含费用区间、gas limit、模式、随机种子及序列 SHA-256。
+广播结束后程序逐笔核对 helper 的 label、sender、nonce 和 gasPriceWei；
+根目录汇总也要求已完成组的费用序列摘要完全一致，否则拒绝形成配对结果。
+
+group_summary.json 的 normalFeeStats 以及根目录 evaluation_summary.csv
+给出已接受 normal 的 Mean、Median、Min、Max、P10、P90，单位 Gwei；
+P10/P90 使用 nearest-rank 定义。group/normal_fee_bins.csv 和根目录
+normal_fee_bins.csv 按报价区间给出接受数、已证实的容量驱逐数、
+最终驱逐率、第 10 个观察区块标记前的驱逐数及驱逐率。
+随机范围分成四个等宽的整数 Wei 区间；固定模式只有一个价格区间。
+只有轨迹审计完整且 checkpoint 覆盖观察窗口时，驱逐率才有数值；
+证据不完整时留空，不能解释为 0%。
+
+这些统计中的 gasPrice 是交易签名时提出的价格，不代表已经支付的手续费。
+实际已支付的费用只从已上链回执的 gasUsed × effectiveGasPrice 得到；
+tx_outcomes.csv 分别记录 signedGasPriceWei、effectiveGasPriceWei、gasUsed
+和 feeWei，未上链交易的实际费用字段留空。相同 sender 的多笔交易有
+nonce 依赖，因此不同价格区间的驱逐率是描述性观察，不单独证明价格
+导致驱逐。正式实验只在远程 Ubuntu 执行。

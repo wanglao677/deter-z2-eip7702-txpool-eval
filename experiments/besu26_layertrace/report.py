@@ -3,10 +3,13 @@
 import argparse
 import csv
 import json
+from decimal import Decimal
 from collections import Counter, defaultdict
 from pathlib import Path
 
 from audit import csv_write
+from normal_fee import bins as normal_fee_bins, gwei, parameters as normal_fee_parameters
+from normal_fee import sequence_sha256, statistics as normal_fee_statistics
 
 
 def read_json(path):
@@ -69,6 +72,48 @@ def classify(record, state, receipt, capacity_hashes, trusted):
     return "UNKNOWN"
 
 
+def normal_record_price(record, config):
+    value = record.get("gasPriceWei")
+    spec = normal_fee_parameters(config)
+    if value in (None, ""):
+        if spec["mode"] != "fixed":
+            raise RuntimeError("Randomized normal record lacks signed gasPriceWei")
+        return spec["centerWei"]  # Older fixed-fee fixtures may omit the helper field.
+    price = int(value)
+    if not spec["minimumWei"] <= price <= spec["maximumWei"]:
+        raise RuntimeError(f"Normal signed gasPriceWei outside configured range: {price}")
+    return price
+
+
+def summarize_normal_fee_bins(config, entries, trusted, group, full_window_unix_ms=None):
+    definitions = normal_fee_bins(config)
+    rows = []
+    for definition in definitions:
+        matching = [entry for entry in entries
+                    if entry["accepted"] and definition["lowerWei"] <= entry["price"] < definition["upperExclusiveWei"]]
+        accepted = len(matching)
+        evicted = sum(entry["outcome"] == "CAPACITY_EVICTION" for entry in matching)
+        included = sum(entry["receipt"] is not None for entry in matching)
+        evicted_in_window = sum(entry["outcome"] == "CAPACITY_EVICTION" and
+                                entry.get("dropUnixMillis") is not None and
+                                entry["dropUnixMillis"] <= full_window_unix_ms
+                                for entry in matching) if full_window_unix_ms is not None else None
+        rows.append(dict(group=group, bin=definition["bin"],
+            lowerGasPriceWei=definition["lowerWei"],
+            upperGasPriceWeiInclusive=definition["upperExclusiveWei"] - 1,
+            lowerGasPriceGwei=gwei(definition["lowerWei"]),
+            upperGasPriceGweiInclusive=gwei(definition["upperExclusiveWei"] - 1),
+            normalAccepted=accepted, normalCapacityEvictedConfirmed=evicted if trusted else None,
+            normalIncluded=included,
+            normalCapacityEvictedByFullWindow=(evicted_in_window if trusted else None),
+            evictionRateByFullWindow=(format(Decimal(evicted_in_window) / accepted, ".6f")
+                                      if trusted and accepted and evicted_in_window is not None else None),
+            normalOtherOrUnknown=accepted - included - evicted,
+            evictionRate=(format(Decimal(evicted) / accepted, ".6f") if trusted and accepted else None),
+            includedPaidFeeWei=str(sum(receipt_fee(entry["receipt"]) for entry in matching if entry["receipt"]))))
+    return rows
+
+
 def summarize_group(folder):
     folder = Path(folder)
     workload = read_json(folder / "workload_manifest.json")
@@ -114,6 +159,7 @@ def summarize_group(folder):
     attack_roles = defaultdict(lambda: dict(included=0, includedWithinFullWindow=0,
         successful=0, failed=0, feeWei=0, feeWeiWithinFullWindow=0, gasUsed=[]))
     tx_rows, attack_receipts = [], []
+    normal_fee_entries = []
     first_attack_blocks = []
     normal_drop_times = []
     normal_drop_phases = Counter()
@@ -132,6 +178,14 @@ def summarize_group(folder):
             unattributed_drops[kind] += 1
         block = int(receipt["blockNumber"], 16) if receipt else None
         fee = receipt_fee(receipt) if receipt else 0
+        if kind == "normal" and receipt and receipt.get("type") is not None and int(receipt["type"], 16) != 0:
+            raise RuntimeError("Normal receipt type differs from signed legacy type 0")
+        signed_price = normal_record_price(record, config) if kind == "normal" else record.get("gasPriceWei", "")
+        if kind == "normal":
+            drop_time = state.get("lastUnixMillis") if outcome == "CAPACITY_EVICTION" else None
+            normal_fee_entries.append(dict(price=signed_price, outcome=outcome,
+                receipt=receipt, accepted=bool(record.get("hash")) and not record.get("error"),
+                dropUnixMillis=int(drop_time) if drop_time not in (None, "") else None))
         included_in_window = block is not None and block <= full_target
         if kind == "attack" and receipt:
             stats = attack_roles[role]
@@ -150,11 +204,12 @@ def summarize_group(folder):
             normal_drop_phases[phase_at(t, normal_timing, attack_timing)] += 1
         row = dict(kind=kind, role=role, label=record["label"], sender=record.get("sender", ""),
             nonce=record.get("nonce", ""), hash=record.get("hash", ""),
+            signedTxType="legacy-0", signedGasPriceWei=signed_price,
             calldataPaddingBytes=record.get("calldataPaddingBytes", ""),
             observedState=state.get("observedState", "UNOBSERVED"), layer=state.get("layer", ""),
             layerHistory=state.get("history", ""), lastReason=state.get("lastReason", ""),
             lastUnixMillis=state.get("lastUnixMillis", ""), outcome=outcome,
-            receiptStatus=receipt["status"] if receipt else "",
+            receiptStatus=receipt["status"] if receipt else "", receiptType=receipt.get("type", "") if receipt else "",
             receiptBlock=block if block is not None else "",
             includedWithinFullWindow=included_in_window, gasUsed=int(receipt["gasUsed"], 16) if receipt else "",
             effectiveGasPriceWei=int(receipt["effectiveGasPrice"], 16) if receipt else "",
@@ -165,6 +220,19 @@ def summarize_group(folder):
     csv_write(folder / "tx_outcomes.csv", tx_rows)
     csv_write(folder / "attack_receipts.csv", attack_receipts)
     csv_write(folder / "normal_capacity_drops.csv", normal_drop_times)
+    normal_prices = [entry["price"] for entry in normal_fee_entries]
+    sequence_digest = sequence_sha256(normal_prices)
+    plan_file = folder / "normal_fee_plan.json"
+    if plan_file.exists():
+        plan = read_json(plan_file)
+        if (plan["sequenceSha256"] != sequence_digest or plan["count"] != len(normal_prices)
+                or plan["mode"] != normal_fee_parameters(config)["mode"]
+                or plan["gasLimit"] != config["normalGas"] or plan["signedTxType"] != "legacy-0"):
+            raise RuntimeError("Normal fee plan does not match recorded transactions and configuration")
+    fee_stats = normal_fee_statistics([entry["price"] for entry in normal_fee_entries if entry["accepted"]])
+    fee_bin_rows = summarize_normal_fee_bins(config, normal_fee_entries, trusted, workload.get("group"),
+                                              full_marker["unixMillis"])
+    csv_write(folder / "normal_fee_bins.csv", fee_bin_rows)
     balances = read_json(folder / "first_attack_balances.json")
     csv_write(folder / "first_attack_balances.csv", balances)
     role_summary = {}
@@ -189,6 +257,10 @@ def summarize_group(folder):
         normalCapacityEvictedConfirmed=normal_count if trusted else None,
         normalCapacityEvictedByFullWindow=normal_within_window if trusted else None,
         normalCapacityEvictedByPhase=dict(normal_drop_phases),
+        normalGasPriceMode=normal_fee_parameters(config)["mode"],
+        normalFeeRandomSeed=normal_fee_parameters(config)["randomSeed"],
+        normalFeeSequenceSha256=sequence_digest,
+        normalFeeStats=fee_stats, normalFeeBins=fee_bin_rows,
         unattributedPoolDrops=dict(unattributed_drops),
         finalLayerCounts={kind: dict(final_layers[kind]) for kind in ("normal", "attack")},
         normalEverEnteredLayer={layer: len(hashes) for layer, hashes in ever_layers.items()},
@@ -214,11 +286,25 @@ def summarize_evaluation(root):
         path = root / group / "group_summary.json"
         if path.exists():
             groups[group] = read_json(path)
+    digests = [result.get("normalFeeSequenceSha256") for result in groups.values()]
+    if len(digests) > 1 and all(digests) and len(set(digests)) != 1:
+        raise RuntimeError("G0/G1/G2 normal gas price sequences differ; evaluation is not paired")
     rows = []
+    all_fee_bins = []
     for group, result in groups.items():
+        all_fee_bins.extend(result.get("normalFeeBins", []))
         full = str(read_json(root / "config.json")["fullWindowBlocks"])
         window = result["windowSummary"][full]
+        stats = result.get("normalFeeStats", {})
         rows.append(dict(group=group, seed=result["seed"], evidenceComplete=result["layerEvidenceComplete"],
+            normalGasPriceMode=result.get("normalGasPriceMode", "fixed"),
+            normalFeeSequenceSha256=result.get("normalFeeSequenceSha256", ""),
+            normalGasPriceMeanGwei=stats.get("meanGwei", ""),
+            normalGasPriceMedianGwei=stats.get("medianGwei", ""),
+            normalGasPriceMinGwei=stats.get("minGwei", ""),
+            normalGasPriceMaxGwei=stats.get("maxGwei", ""),
+            normalGasPriceP10Gwei=stats.get("p10Gwei", ""),
+            normalGasPriceP90Gwei=stats.get("p90Gwei", ""),
             normalSubmitted=result["normalSubmitted"], normalRpcAccepted=result["normalRpcAccepted"],
             normalCapacityEvictedConfirmed=result["normalCapacityEvictedConfirmed"],
             normalCapacityEvictedByFullWindow=result["normalCapacityEvictedByFullWindow"],
@@ -232,6 +318,7 @@ def summarize_evaluation(root):
             receiverBalanceDeltaWei=result["receiverBalanceDeltaWei"],
             firstAttackIncludedBlock=result["firstAttackIncludedBlock"]))
     csv_write(root / "evaluation_summary.csv", rows)
+    csv_write(root / "normal_fee_bins.csv", all_fee_bins)
     (root / "evaluation_summary.json").write_text(json.dumps(dict(groups=groups, table=rows), indent=2) + "\n", encoding="utf-8")
     return rows
 

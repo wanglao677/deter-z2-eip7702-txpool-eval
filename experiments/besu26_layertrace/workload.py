@@ -17,6 +17,8 @@ import mp_exp5_pos as base
 import mp_exp5_7702_pos as delegate_tools
 import mp_exp5_7702_scale_pos as scale
 from funder import load_funder
+from normal_fee import parameters as normal_fee_parameters, plan as normal_fee_plan
+from normal_fee import write_plan as write_normal_fee_plan, verify_records as verify_normal_fee_records
 
 
 def validate_funder_key():
@@ -147,7 +149,8 @@ def sender_snapshot(rpc, accounts, block):
 def validate_setup(rows, config, delegate):
     for row in rows:
         attack = row["label"].startswith("a")
-        price = config["priceUnitWei"] * config["attackPriceMultiplier" if attack else "normalPriceMultiplier"]
+        price = (config["priceUnitWei"] * config["attackPriceMultiplier"] if attack
+                 else normal_fee_parameters(config)["maximumWei"])
         gas = config["attackGas" if attack else "normalGas"]
         required = config["txsPerSender"] * (price * gas + (0 if attack else 1))
         if int(row["balanceWei"]) < required:
@@ -286,11 +289,16 @@ def run(args):
     if any(int(v, 16) for v in rpc.call("txpool_status").values()):
         raise RuntimeError("Setup did not drain the pool")
     wait_block(rpc, rpc.height() + 1)
-    normal_records = send(args.helper, rpc, out, "normal", normal,
-        ["--mode", "normal", "--value-wei", "1", "--gas", str(config["normalGas"]),
-         "--gas-price-wei", str(config["priceUnitWei"] * config["normalPriceMultiplier"]),
-         "--calldata-bytes", str(config["normalPaddingBytes"]), "--send-order", config["normalSendOrder"],
-         "--txs-per-sender", str(config["txsPerSender"])], len(normal) * config["txsPerSender"])
+    fee_plan = normal_fee_plan(config, normal)
+    price_file = write_normal_fee_plan(out, config, fee_plan)
+    normal_flags = ["--mode", "normal", "--value-wei", "1", "--gas", str(config["normalGas"]),
+                    "--gas-price-wei", str(normal_fee_parameters(config)["centerWei"]),
+                    "--calldata-bytes", str(config["normalPaddingBytes"]), "--send-order", config["normalSendOrder"],
+                    "--txs-per-sender", str(config["txsPerSender"])]
+    if price_file:
+        normal_flags += ["--gas-price-wei-list", str(price_file)]
+    normal_records = send(args.helper, rpc, out, "normal", normal, normal_flags, len(fee_plan))
+    verify_normal_fee_records(normal_records, fee_plan)
     normal_timing = json.loads((out / "normal_timing.json").read_text())
     save(out / "normal_block_points.json", dict(
         start=block_point(rpc, normal_timing["before"]["block"], genesis_timestamp, config["secondsPerSlot"]),
@@ -323,6 +331,10 @@ def run(args):
              endPoint=block_point(rpc, block, genesis_timestamp, config["secondsPerSlot"]),
              unixMillis=int(time.time() * 1000)))
     all_receipts = receipts(rpc, normal_records + attack_records)
+    if any(row["kind"] == "normal" and row["receipt"] and
+           row["receipt"].get("type") is not None and int(row["receipt"]["type"], 16) != 0
+           for row in all_receipts):
+        raise RuntimeError("Normal receipt type differs from signed legacy type 0")
     save(out / "receipts.json", all_receipts)
     # Check receipt block hashes against canonical headers; do not trust stale receipt caches.
     receipt_blocks = {r["receipt"]["blockNumber"] for r in all_receipts if r["receipt"]}

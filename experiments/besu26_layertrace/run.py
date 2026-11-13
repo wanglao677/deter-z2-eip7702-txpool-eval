@@ -17,6 +17,7 @@ from audit import audit
 from report import summarize_evaluation, summarize_group
 from build_image import COMMIT
 from funder import create_funder, load_funder
+from normal_fee import parameters as normal_fee_parameters
 from workload import LEGACY, save, validate_funder_key
 
 HERE = Path(__file__).resolve().parent
@@ -45,7 +46,7 @@ def rpc_tx_fee_cap_wei(config):
         "deployment": 2_000_000 * config["setupGasPriceWei"],
         "authorization": 250_000 * config["setupGasPriceWei"],
         "funding": 21_000 * config["setupGasPriceWei"],
-        "normal": config["normalGas"] * config["priceUnitWei"] * config["normalPriceMultiplier"],
+        "normal": config["normalGas"] * normal_fee_parameters(config)["maximumWei"],
         "attack": config["attackGas"] * config["priceUnitWei"] * config["attackPriceMultiplier"],
     }
     for stage, fee in fees.items():
@@ -188,6 +189,7 @@ def evaluation_groups(config, requested):
         raise RuntimeError("Phase 1 requires Besu 26.6.1")
     if not config["poolPolicy"].startswith("LAYERED release defaults"):
         raise RuntimeError("Phase 1 requires the release-default LAYERED pool")
+    normal_fee_parameters(config)
     for field in ("attackFirstPaddingBytes", "attackTailPaddingBytes"):
         if type(config[field]) is not int or config[field] < 0:
             raise RuntimeError(f"{field} must be a non-negative byte count")

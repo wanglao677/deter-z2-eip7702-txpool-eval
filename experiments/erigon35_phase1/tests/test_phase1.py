@@ -6,10 +6,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-from run import network_config, validate, GROUPS
+from run import network_config, validate, GROUPS, rpc_url
 from report import classify, drain_cost_comparable, parse_trace, summarize_group, summarize_evaluation
 BESU = HERE.parent / "besu26_layertrace"
 sys.path.insert(1, str(BESU))
@@ -27,6 +28,14 @@ def receipt(block, gas, price):
 
 
 class ConfigTests(unittest.TestCase):
+    def test_erigon_rpc_url_uses_pinned_package_port_id(self):
+        with patch("run.output", return_value="32769") as mocked:
+            self.assertEqual(rpc_url("test-enclave"), "http://127.0.0.1:32769")
+        mocked.assert_called_once_with([
+            "kurtosis", "port", "print", "--format", "number",
+            "test-enclave", "el-1-erigon-lighthouse", "ws-rpc",
+        ])
+
     def config(self):
         return json.loads((HERE / "config_fixed.json").read_text())
 

@@ -24,6 +24,7 @@ import mp_exp5_7702_scale_pos as scale
 
 BUILD = HERE / ".build"
 SERVICE = "el-1-erigon-lighthouse"
+RPC_PORT = "ws-rpc"  # ethereum-package c4a8e15 exposes Erigon HTTP and WS on this port ID.
 GROUPS = {"G0": ("baseline", "alice-sender"),
           "G1": ("attack", "alice-sender"),
           "G2": ("attack", "alice-no-drain")}
@@ -146,6 +147,11 @@ def container(enclave):
     return ids[0]
 
 
+def rpc_url(enclave):
+    port = output(["kurtosis", "port", "print", "--format", "number", enclave, SERVICE, RPC_PORT])
+    return f"http://127.0.0.1:{port}"
+
+
 def run_groups(args, config, funder_address, helper, package, manifest):
     os.umask(0o077)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -169,8 +175,7 @@ def run_groups(args, config, funder_address, helper, package, manifest):
                                       stdout=handle, stderr=subprocess.STDOUT)
         if launched.returncode:
             raise RuntimeError(f"Network startup failed; preserve {folder / 'network.log'} and {enclave}")
-        port = output(["kurtosis", "port", "print", "--format", "number", enclave, SERVICE, "rpc"])
-        rpc = f"http://127.0.0.1:{port}"
+        rpc = rpc_url(enclave)
         cid = container(enclave)
         details = json.loads(output(["docker", "inspect", cid]))[0]
         save(folder / "network_identity.json", dict(enclave=enclave, rpc=rpc, container=cid,

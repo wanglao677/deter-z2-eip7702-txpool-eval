@@ -1,0 +1,150 @@
+{
+  "cohort": "Phase 1 fixed-fee seed01",
+  "window": "relative blocks 1-10 after injection in block 8",
+  "metricSemantics": {
+    "blue": "G1 benign actual paid fees per block, exact receipt sum",
+    "green": "G0 benign actual paid fees per block, exact receipt sum",
+    "red": "G1 attack actual paid fees per block, exact receipt sum",
+    "black": "conventional spam cost baseline unavailable; no curve plotted"
+  },
+  "data": {
+    "Besu": {
+      "archiveSha256": "041536090b79cb89a9a248302782162d80458ac609b35e6c949fa5dcbe3271dd",
+      "sourceAudit": {
+        "baselineWorkloadReceiptFile": "G0/tx_outcomes.csv",
+        "baselineWorkloadMaximumSignedGasPriceWeiByRelativeBlock": [
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          1714285714284
+        ],
+        "baselineIncludedWorkloadReceipts": 5820,
+        "completeG0BlockTransactionFiles": [],
+        "archivedBlockGasLimitFields": [],
+        "injectionBlock": 8,
+        "firstAttackReceiptBlock": 9,
+        "observationEndBlock": 18,
+        "attackBroadcastFinishedWithinInjectionBlock": true,
+        "conventionalSpamCostBaselineComputable": false,
+        "spamBaselineMissing": [
+          "complete transaction lists for G0 blocks 9-18",
+          "actual gasLimit field in each G0 block header",
+          "a highest included GasPrice for empty G0 blocks"
+        ]
+      },
+      "series": {
+        "attackedNormalFeeWei": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "baselineNormalFeeWei": [
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960,
+          102684754285611600960
+        ],
+        "attackedAdversarialFeeWei": [
+          16836499999983163500,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    "Erigon": {
+      "archiveSha256": "4db1807f6945bfd92813394dc4d632ef40aa8422d031d653e3aa18a55b55d550",
+      "sourceAudit": {
+        "baselineWorkloadReceiptFile": "G0/fee_receipts.csv",
+        "baselineWorkloadMaximumSignedGasPriceWeiByRelativeBlock": [
+          1714285714284,
+          1714285714284,
+          1714285714284,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null
+        ],
+        "baselineIncludedWorkloadReceipts": 7040,
+        "completeG0BlockTransactionFiles": [],
+        "archivedBlockGasLimitFields": [],
+        "injectionBlock": 8,
+        "firstAttackReceiptBlock": 9,
+        "observationEndBlock": 18,
+        "attackBroadcastFinishedWithinInjectionBlock": true,
+        "conventionalSpamCostBaselineComputable": false,
+        "spamBaselineMissing": [
+          "complete transaction lists for G0 blocks 9-18",
+          "actual gasLimit field in each G0 block header",
+          "a highest included GasPrice for empty G0 blocks"
+        ]
+      },
+      "series": {
+        "attackedNormalFeeWei": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "baselineNormalFeeWei": [
+          102851999999897148000,
+          102851999999897148000,
+          47735999999952264000,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "attackedAdversarialFeeWei": [
+          16836499999983163500,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "cohort": "fixed-fee seed01",
+  "windowBlocks": 10,
+  "feeBasis": "receipt gasUsed * effectiveGasPrice",
+  "figures": {
+    "1": [
+      "Besu G1/layer_history.csv",
+      "Besu G1/normal_capacity_drops.csv",
+      "Besu G1/tx_outcomes.csv",
+      "Besu G1/window1_marker.json",
+      "Besu G1,G2/layer_audit.json"
+    ],
+    "2": [
+      "Besu G0,G1,G2/tx_outcomes.csv",
+      "Erigon G0,G1,G2/fee_receipts.csv"
+    ],
+    "3": [
+      "Besu G0,G1,G2/tx_outcomes.csv",
+      "Besu G1,G2/attack_receipts.csv",
+      "Erigon G0,G1,G2/fee_receipts.csv"
+    ],
+    "4": [
+      "Besu G1,G2/attack_receipts.csv",
+      "Erigon G1,G2/fee_receipts.csv"
+    ],
+    "5": [
+      "Besu G1,G2/attack_receipts.csv",
+      "Erigon G1,G2/fee_receipts.csv"
+    ]
+  },
+  "clients": {
+    "Besu": {
+      "archive": "besu26-phase1-seed01-review.tar (2).gz",
+      "archiveSha256": "041536090b79cb89a9a248302782162d80458ac609b35e6c949fa5dcbe3271dd",
+      "normalCalldataPaddingBytes": 8192,
+      "normalGasLimit": 150000,
+      "groups": {
+        "G0": {
+          "anchorBlock": 8,
+          "benignIncluded": 5820,
+          "attackIncluded": 0,
+          "benignPaidFeeWei": "1026847542856116009600",
+          "attackPaidFeeWei": "0",
+          "attackFirstIncluded": 0,
+          "attackTailIncluded": 0,
+          "benignCapacityEvictedConfirmed": 0
+        },
+        "G1": {
+          "anchorBlock": 8,
+          "benignIncluded": 0,
+          "attackIncluded": 125,
+          "benignPaidFeeWei": "0",
+          "attackPaidFeeWei": "16836499999983163500",
+          "attackFirstIncluded": 125,
+          "attackTailIncluded": 0,
+          "benignCapacityEvictedConfirmed": 7040
+        },
+        "G2": {
+          "anchorBlock": 8,
+          "benignIncluded": 0,
+          "attackIncluded": 5821,
+          "benignPaidFeeWei": "0",
+          "attackPaidFeeWei": "2381448499997618551500",
+          "attackFirstIncluded": 125,
+          "attackTailIncluded": 5696,
+          "benignCapacityEvictedConfirmed": 7040
+        }
+      },
+      "mechanism": {
+        "initialLayers": {
+          "prioritized": 5000,
+          "ready": 2040
+        },
+        "paths": {
+          "prioritized_ready_sparse_drop": 6701,
+          "ready_sparse_drop": 339
+        },
+        "firstDropSeconds": 6.092,
+        "lastDropSeconds": 11.225,
+        "broadcastDurationSeconds": 11.569,
+        "maxTransientBetweenObserverEvents": 1,
+        "dropsBeforeFirstAttackInclusion": true
+      },
+      "withinClientDrainFeeReductionPercent": 99.29301431460726
+    },
+    "Erigon": {
+      "archive": "erigon35-phase1-seed01-review.tar.gz",
+      "archiveSha256": "4db1807f6945bfd92813394dc4d632ef40aa8422d031d653e3aa18a55b55d550",
+      "normalCalldataPaddingBytes": 0,
+      "normalGasLimit": 21000,
+      "groups": {
+        "G0": {
+          "anchorBlock": 8,
+          "benignIncluded": 7040,
+          "attackIncluded": 0,
+          "benignPaidFeeWei": "253439999999746560000",
+          "attackPaidFeeWei": "0",
+          "attackFirstIncluded": 0,
+          "attackTailIncluded": 0,
+          "benignUnknownAtBlock10": 0
+        },
+        "G1": {
+          "anchorBlock": 8,
+          "benignIncluded": 0,
+          "attackIncluded": 125,
+          "benignPaidFeeWei": "0",
+          "attackPaidFeeWei": "16836499999983163500",
+          "attackFirstIncluded": 125,
+          "attackTailIncluded": 0,
+          "benignUnknownAtBlock10": 7040
+        },
+        "G2": {
+          "anchorBlock": 8,
+          "benignIncluded": 0,
+          "attackIncluded": 10000,
+          "benignPaidFeeWei": "0",
+          "attackPaidFeeWei": "952999999999047000000",
+          "attackFirstIncluded": 125,
+          "attackTailIncluded": 9875,
+          "benignUnknownAtBlock10": 7040
+        }
+      },
+      "withinClientDrainFeeReductionPercent": 98.23331584470094
+    }
+  }
+}

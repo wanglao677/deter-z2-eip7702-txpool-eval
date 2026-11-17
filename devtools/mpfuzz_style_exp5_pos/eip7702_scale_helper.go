@@ -42,6 +42,8 @@ type sentRecord struct {
 	GasPriceWei          string `json:"gasPriceWei,omitempty"`
 	CalldataPaddingBytes *int   `json:"calldataPaddingBytes,omitempty"`
 	Hash                 string `json:"hash"`
+	AttemptUnixMillis    int64  `json:"attemptUnixMillis,omitempty"`
+	CompletedUnixMillis  int64  `json:"completedUnixMillis,omitempty"`
 	Error                string `json:"error,omitempty"`
 }
 
@@ -411,9 +413,11 @@ func main() {
 				txData = firstData
 				txCalldataBytes = *firstCalldataBytes
 			}
+			attemptMillis := time.Now().UnixMilli()
 			tx, err := signAndSendLegacy(ctx, client, signer, state.key, state.nonce+uint64(j), state.from, value, *gasLimit, txGasPrice, txData)
+			completedMillis := time.Now().UnixMilli()
 			label := fmt.Sprintf("%s-x%d", state.account.Label, j+1)
-			record := sentRecord{Kind: *mode, Label: label, Sender: state.from.Hex(), Nonce: state.nonce + uint64(j), GasPriceWei: txGasPrice.String(), CalldataPaddingBytes: &txCalldataBytes}
+			record := sentRecord{Kind: *mode, Label: label, Sender: state.from.Hex(), Nonce: state.nonce + uint64(j), GasPriceWei: txGasPrice.String(), CalldataPaddingBytes: &txCalldataBytes, AttemptUnixMillis: attemptMillis, CompletedUnixMillis: completedMillis}
 			if err != nil {
 				record.Error = err.Error()
 			} else {

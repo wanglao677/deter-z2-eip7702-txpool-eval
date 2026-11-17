@@ -44,12 +44,14 @@ def assert_private_rpc(url: str):
         raise RuntimeError("Phase 2 accepts only a local isolated Kurtosis HTTP RPC")
 
 
-def sleep_until(target: float, stop: threading.Event):
+def sleep_until(target: float, stop: threading.Event, errors=None):
     while not stop.is_set():
+        if errors:
+            raise RuntimeError(f"Normal sender failed: {errors[0]}")
         remaining = target - time.monotonic()
         if remaining <= 0:
             return True
-        stop.wait(min(remaining, 1))
+        stop.wait(min(remaining, .2))
     return False
 
 
@@ -76,22 +78,39 @@ def raw_send(url: str, raw: bytes, expected_hash: str) -> tuple[str | None, str 
     return result, None, None
 
 
+def normal_signer_addresses(accounts: list[dict]) -> list[str]:
+    addresses = []
+    for account in accounts:
+        checksum_address = Account.from_key(account["private_key"]).address
+        if checksum_address.lower() != account["address"].lower():
+            raise RuntimeError(f"Normal sender key/address mismatch: {account['label']}")
+        addresses.append(checksum_address)
+    return addresses
+
+
+def sign_normal(row: dict, account: dict, recipient: str, data: bytes,
+                config: dict, chain_id: int):
+    # eth-account requires a checksummed `to` address for legacy signing.
+    tx = dict(nonce=row["nonce"], gasPrice=row["gasPriceWei"],
+              gas=config["normalGas"], to=recipient, value=1,
+              data=data, chainId=chain_id)
+    return Account.sign_transaction(tx, account["private_key"])
+
+
 def send_normal(rpc_url: str, chain_id: int, accounts: list[dict], rows: list[dict],
                 config: dict, anchor_mono: float, anchor_unix_ms: int,
                 output: Path, stop: threading.Event, error_box: list[str]):
     data = bytes(config["normalPaddingBytes"])
     with output.open("w", encoding="utf-8", buffering=1) as handle:
         try:
+            recipients = normal_signer_addresses(accounts)
             for row in rows:
                 if not sleep_until(anchor_mono + row["offsetMillis"] / 1000, stop):
                     return
                 account = accounts[row["senderIndex"]]
                 sign_started = int(time.time() * 1000)
-                # Legacy type-0; gas limit and fee plan match the paired groups.
-                tx = dict(nonce=row["nonce"], gasPrice=row["gasPriceWei"],
-                          gas=config["normalGas"], to=account["address"], value=1,
-                          data=data, chainId=chain_id)
-                signed = Account.sign_transaction(tx, account["private_key"])
+                signed = sign_normal(row, account, recipients[row["senderIndex"]],
+                                     data, config, chain_id)
                 expected_hash = "0x" + signed.hash.hex().removeprefix("0x")
                 attempted = int(time.time() * 1000)
                 result, kind, error = raw_send(rpc_url, signed.raw_transaction, expected_hash)
@@ -251,6 +270,12 @@ def run(args):
     shutil.copyfile(args.schedule, out / "normal_schedule.jsonl")
     budget = validate_plan(config, planned, normal, int(genesis["gasLimit"], 16))
     save(out / "normal_budget.json", budget)
+    # Check the real derived sender and its legacy transaction before costly setup.
+    recipients = normal_signer_addresses(normal)
+    first = planned[0]
+    sign_normal(first, normal[first["senderIndex"]],
+                recipients[first["senderIndex"]], bytes(config["normalPaddingBytes"]),
+                config, chain_id)
     funder = load_funder(args.funder_file)
     save(out / "workload_manifest.json", dict(group=args.group, mode=args.mode,
          client=args.client, clientVersion=version, chainId=chain_id, genesis=genesis,
@@ -289,7 +314,7 @@ def run(args):
                    plannedInjectionOffsetSlots=phase["preSlots"], group=args.group)
     try:
         inject_at = anchor_mono + phase["preSlots"] * config["secondsPerSlot"]
-        if not sleep_until(inject_at, stop):
+        if not sleep_until(inject_at, stop, errors):
             raise RuntimeError("Interrupted before attack phase")
         markers["injectionWindowStartUnixMillis"] = int(time.time() * 1000)
         markers["injectionWindowStartBlock"] = rpc.height()
@@ -310,7 +335,7 @@ def run(args):
         markers["injectionEndBlock"] = rpc.height()
         markers["attackWasBroadcast"] = args.mode == "attack"
         save(out / "phase_markers.json", markers)
-        if not sleep_until(anchor_mono + duration, stop):
+        if not sleep_until(anchor_mono + duration, stop, errors):
             raise RuntimeError("Interrupted during observation")
         end_block = rpc.height()
         horizon_slot = anchor_slot + total_slots

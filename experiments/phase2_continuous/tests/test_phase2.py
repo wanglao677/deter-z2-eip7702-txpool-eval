@@ -95,6 +95,39 @@ class PlanTests(unittest.TestCase):
             module.base.DEFAULT_FUNDER.clear()
             module.base.DEFAULT_FUNDER.update(original)
 
+    def test_real_derived_normal_account_signs_legacy_transaction(self):
+        import importlib.util
+        from eth_account import Account
+        spec = importlib.util.spec_from_file_location("phase2_workload", HERE / "workload.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        for client in ("besu", "erigon"):
+            with self.subTest(client=client):
+                config = load_config(Args(client))
+                account = module.scale.derive_accounts("n", 1, "seed01:" + client)[0]
+                recipient = module.normal_signer_addresses([account])[0]
+                self.assertEqual(recipient.lower(), account["address"].lower())
+                self.assertNotEqual(recipient, account["address"])
+                row = dict(nonce=0, gasPriceWei=config["priceUnitWei"] *
+                           config["normalPriceMultiplier"])
+                signed = module.sign_normal(row, account, recipient,
+                                            bytes(config["normalPaddingBytes"]), config,
+                                            config.get("chainId", 13371349))
+                self.assertEqual(Account.recover_transaction(signed.raw_transaction).lower(),
+                                 account["address"].lower())
+
+    def test_normal_sender_error_interrupts_wait(self):
+        import importlib.util
+        import threading
+        import time
+        spec = importlib.util.spec_from_file_location("phase2_workload", HERE / "workload.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        start = time.monotonic()
+        with self.assertRaisesRegex(RuntimeError, "Normal sender failed"):
+            module.sleep_until(start + 60, threading.Event(), ["TypeError: invalid to"])
+        self.assertLess(time.monotonic() - start, 1)
+
     def test_phase_names(self):
         phase = dict(preSlots=1, attackSlots=1, postSlots=1)
         self.assertEqual([phase_for_slot(i, phase) for i in range(3)],

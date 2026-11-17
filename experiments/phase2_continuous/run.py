@@ -23,7 +23,7 @@ sys.path.insert(0, str(BESU))
 sys.path.insert(0, str(LEGACY))
 import mp_exp5_7702_scale_pos as scale
 from normal_fee import parameters as fee_parameters
-from metrics import jsonl, summarize_slots
+from metrics import jsonl, setup_fee_totals, summarize_slots
 from plan import schedule, write_schedule
 
 CLIENTS = {
@@ -187,7 +187,7 @@ def _read_csv(path: Path):
         return list(csv.DictReader(handle))
 
 
-def audit_group(root: Path, group: str):
+def audit_group(root: Path, group: str, *, allow_incomplete_setup: bool = False):
     folder = root / group
     config = json.loads((root / "config.json").read_text())
     anchor = json.loads((folder / "anchor.json").read_text())
@@ -219,13 +219,58 @@ def audit_group(root: Path, group: str):
             raise RuntimeError(f"{group}: summary {kind} fee differs")
     if int(summary["normalAttempts"]) != len(jsonl(folder / "normal_schedule.jsonl")):
         raise RuntimeError(f"{group}: normal schedule has incomplete submissions")
-    if "setupFeeWei" in summary:
-        setup_fee = sum(int(item["receipt"]["gasUsed"], 16) *
-                        int(item["receipt"]["effectiveGasPrice"], 16)
-                        for item in json.loads((folder / "setup_receipts.json").read_text()))
-        if int(summary["setupFeeWei"]) != setup_fee:
-            raise RuntimeError(f"{group}: setup fee differs from raw receipts")
+    setup_path = folder / "setup_receipts.json"
+    balance_path = folder / "receiver_balance.json"
+    if not allow_incomplete_setup and (
+            not setup_path.is_file() or not balance_path.is_file() or
+            any(field not in summary for field in (
+                "setupFeeWei", "setupFeeByStageWei", "receiverBalanceDeltaWei", "attackFeeScope"))):
+        raise RuntimeError(f"{group}: incomplete post-collection summary; run recover")
+    if setup_path.is_file():
+        by_stage = setup_fee_totals(json.loads(setup_path.read_text()), config)
+        if "setupFeeWei" in summary:
+            if int(summary["setupFeeWei"]) != sum(by_stage.values()):
+                raise RuntimeError(f"{group}: setup fee differs from raw receipts")
+            if summary["setupFeeByStageWei"] != {k: str(v) for k, v in by_stage.items()}:
+                raise RuntimeError(f"{group}: setup stage fees differ from raw receipts")
+    if balance_path.is_file() and "receiverBalanceDeltaWei" in summary:
+        balance = json.loads(balance_path.read_text())
+        delta = int(balance["afterWei"]) - int(balance["beforeWei"])
+        if int(summary["receiverBalanceDeltaWei"]) != delta:
+            raise RuntimeError(f"{group}: receiver balance delta differs from saved evidence")
     return actual
+
+
+def recover_group(root: Path, group: str):
+    """Finish a group whose raw collection completed before setup fee summary failed."""
+    folder = root / group
+    summary_path = folder / "phase2_summary.json"
+    summary = json.loads(summary_path.read_text())
+    if "setupFeeWei" in summary:
+        audit_group(root, group)
+        return summary
+    markers = json.loads((folder / "phase_markers.json").read_text())
+    balance = json.loads((folder / "receiver_balance.json").read_text())
+    if (int(markers["observationEndBlock"]) != int(summary["observedThroughBlock"]) or
+            int(balance["observedThroughBlock"]) != int(summary["observedThroughBlock"])):
+        raise RuntimeError(f"{group}: saved observation boundaries differ")
+    if bool(markers["attackWasBroadcast"]) != (GROUPS[group][0] == "attack"):
+        raise RuntimeError(f"{group}: attack marker differs from group mode")
+    audit_group(root, group, allow_incomplete_setup=True)
+    config = json.loads((root / "config.json").read_text())
+    by_stage = setup_fee_totals(
+        json.loads((folder / "setup_receipts.json").read_text()), config)
+    delta = int(balance["afterWei"]) - int(balance["beforeWei"])
+    if GROUPS[group][1] == "alice-no-drain" and delta != 0:
+        raise RuntimeError(f"{group}: no-drain receiver balance changed")
+    summary.update(receiverBalanceDeltaWei=str(delta),
+                   setupFeeWei=str(sum(by_stage.values())),
+                   setupFeeByStageWei={k: str(v) for k, v in by_stage.items()},
+                   attackFeeScope="post-setup attack transaction receipts within observation horizon",
+                   recoveredFromSavedEvidence=True)
+    save(summary_path, summary)
+    audit_group(root, group)
+    return summary
 
 
 def comparison(root: Path):
@@ -271,7 +316,7 @@ def comparison(root: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("init-funder", "plan", "prepare", "evaluation", "audit"))
+    parser.add_argument("action", choices=("init-funder", "plan", "prepare", "evaluation", "audit", "recover"))
     parser.add_argument("--client", choices=tuple(CLIENTS), required=True)
     parser.add_argument("--group", default="G0,G1",
                         help="Comma-separated G0,G1,G2 or all; default G0,G1")
@@ -292,9 +337,15 @@ def main():
     if args.action == "init-funder":
         subprocess.run(phase1_command(args, "init-funder", config_path), check=True)
         return
-    if args.action == "audit":
+    if args.action in ("audit", "recover"):
         if not args.out:
-            parser.error("audit requires --out with an existing Phase 2 run directory")
+            parser.error(f"{args.action} requires --out with an existing Phase 2 run directory")
+        if args.action == "recover":
+            saved_config = json.loads((args.out / "config.json").read_text())
+            if saved_config != config:
+                raise RuntimeError("Recovery requires the same client, config and fee mode as the saved run")
+            for group in selected:
+                recover_group(args.out, group)
         print(json.dumps(comparison(args.out), indent=2))
         return
     if args.action == "plan":

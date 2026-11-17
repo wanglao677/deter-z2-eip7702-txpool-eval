@@ -8,9 +8,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-from metrics import FIELDS, collect, summarize_slots
+from metrics import FIELDS, collect, setup_fee_totals, summarize_slots
 from plan import phase_for_slot, schedule, validate_plan
-from run import load_config, audit_group
+from run import load_config, audit_group, comparison, recover_group
 from plot import plot as plot_figure
 
 ETH = 10**18
@@ -231,6 +231,8 @@ class MetricTests(unittest.TestCase):
     def test_offline_audit_recomputes_saved_metrics(self):
         import hashlib
         config, blocks, receipts, submissions, snapshots = self.fixture()
+        config["normalSenders"] = 1
+        config["attackSenders"] = 1
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             folder = root / "G0"
@@ -238,6 +240,7 @@ class MetricTests(unittest.TestCase):
             (root / "config.json").write_text(json.dumps(config))
             payload = json.dumps(dict(index=0)) + "\n"
             (folder / "normal_schedule.jsonl").write_text(payload)
+            (root / "normal_schedule.jsonl").write_text(payload)
             digest = hashlib.sha256(payload.encode()).hexdigest()
             (folder / "anchor.json").write_text(json.dumps(dict(
                 blockNumber=10, slotNumber=0, unixMillis=0, scheduleSha256=digest)))
@@ -247,11 +250,48 @@ class MetricTests(unittest.TestCase):
             (folder / "attack.jsonl").write_text(json.dumps(submissions[1]) + "\n")
             (folder / "pool_snapshots.jsonl").write_text("".join(json.dumps(r) + "\n" for r in snapshots))
             collect(FakeRpc(blocks, receipts), folder, config, "besu", "G0", 1000, 10, 0, 0, 11)
+            with self.assertRaisesRegex(RuntimeError, "incomplete post-collection summary"):
+                audit_group(root, "G0")
+            setup_receipt = dict(status="0x1", gasUsed="0x64", effectiveGasPrice="0x2")
+            setup_rows = [
+                dict(stage="deploy", receipt=dict(kind="deploy", label="Alice7702Drain",
+                                                  hash="0x1", receipt=setup_receipt)),
+                dict(stage="fund_normal", receipt=setup_receipt),
+                dict(stage="fund_attack", receipt=setup_receipt),
+                dict(stage="authorize", receipt=setup_receipt),
+            ]
+            (folder / "setup_receipts.json").write_text(json.dumps(setup_rows))
+            (folder / "receiver_balance.json").write_text(json.dumps(dict(
+                beforeWei="5", afterWei="5", observedThroughBlock=11)))
+            (folder / "phase_markers.json").write_text(json.dumps(dict(
+                observationEndBlock=11, attackWasBroadcast=False)))
+            recovered = recover_group(root, "G0")
+            self.assertEqual(recovered["setupFeeWei"], "800")
+            self.assertEqual(recovered["setupFeeByStageWei"]["deploy"], "200")
+            self.assertTrue(recovered["recoveredFromSavedEvidence"])
+            self.assertEqual(recover_group(root, "G0")["setupFeeWei"], "800")
             self.assertEqual(len(audit_group(root, "G0")), 3)
+            self.assertEqual(comparison(root)["recovery"]["status"],
+                             "NOT_EVALUABLE_UNTIL_G0_AND_G1")
             csv_path = folder / "per_block_metrics.csv"
             csv_path.write_text(csv_path.read_text().replace("105000", "105001", 1))
             with self.assertRaises(RuntimeError):
                 audit_group(root, "G0")
+
+    def test_setup_fee_validation_accepts_direct_receipts_and_rejects_missing_gas(self):
+        config = self.fixture()[0]
+        config["normalSenders"] = 1
+        config["attackSenders"] = 1
+        receipt = dict(status="0x1", gasUsed="0x64", effectiveGasPrice="0x2")
+        rows = [dict(stage=stage, receipt=receipt) for stage in (
+            "deploy", "fund_normal", "fund_attack", "authorize")]
+        self.assertEqual(setup_fee_totals(rows, config), {
+            "deploy": 200, "fund_normal": 200, "fund_attack": 200, "authorize": 200})
+        rows[0] = dict(stage="deploy", receipt=dict(status="0x1", effectiveGasPrice="0x2"))
+        with self.assertRaisesRegex(RuntimeError, "missing complete setup receipt"):
+            setup_fee_totals(rows, config)
+        with self.assertRaisesRegex(RuntimeError, "Setup receipt counts"):
+            setup_fee_totals(rows[1:], config)
 
     def test_plot_synthetic_fixture_is_labeled(self):
         config, blocks, receipts, submissions, snapshots = self.fixture()

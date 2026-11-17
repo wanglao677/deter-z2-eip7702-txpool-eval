@@ -41,6 +41,34 @@ def number(value):
     raise ValueError(f"Not a quantity: {value!r}")
 
 
+def setup_fee_totals(entries: list[dict], config: dict) -> dict[str, int]:
+    """Validate setup receipts and sum fees from gas used times effective price."""
+    expected = Counter(deploy=1, fund_normal=config["normalSenders"],
+                       fund_attack=config["attackSenders"],
+                       authorize=config["attackSenders"])
+    counts = Counter()
+    totals = {}
+    for entry in entries:
+        stage = entry.get("stage")
+        if stage not in expected:
+            raise RuntimeError(f"Unexpected setup stage: {stage!r}")
+        receipt = entry.get("receipt")
+        # Older Phase 2 runs nested the deployment record inside "receipt".
+        if stage == "deploy" and isinstance(receipt, dict) and receipt.get("kind") == "deploy":
+            receipt = receipt.get("receipt")
+        if (not isinstance(receipt, dict) or
+                any(field not in receipt for field in ("gasUsed", "effectiveGasPrice", "status"))):
+            raise RuntimeError(f"{stage}: missing complete setup receipt")
+        if receipt["status"] != "0x1":
+            raise RuntimeError(f"{stage}: setup receipt did not succeed")
+        counts[stage] += 1
+        totals[stage] = totals.get(stage, 0) + (
+            number(receipt["gasUsed"]) * number(receipt["effectiveGasPrice"]))
+    if counts != expected:
+        raise RuntimeError(f"Setup receipt counts {dict(counts)} differ from expected {dict(expected)}")
+    return totals
+
+
 def quantile(values: list[int], q: float):
     if not values:
         return ""

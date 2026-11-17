@@ -117,6 +117,22 @@ Keep the terminal in tmux; use `Ctrl-b d` to detach. A completed group is
 stopped but not removed. Failures preserve its enclave and records for
 diagnosis, and the runner does not silently resubmit uncertain transactions.
 
+If a group reaches the end of collection but fails while adding setup fees,
+keep the saved run directory. After updating the code, validate and finish
+the saved summary offline, then append the missing group to that same run:
+
+```bash
+RUN=~/ETH/besu26-layertrace-eval/experiments/phase2_continuous/runs/<actual-run-name>
+python experiments/phase2_continuous/run.py recover --client besu --group G0 --seed seed01 --fee-mode fixed --out "$RUN"
+python experiments/phase2_continuous/run.py audit --client besu --out "$RUN"
+python -u experiments/phase2_continuous/run.py evaluation --client besu --group G1 --seed seed01 --fee-mode fixed --out "$RUN"
+```
+
+Recovery reads saved blocks, receipts, submission records, setup receipts and
+observation markers. It rejects incomplete or inconsistent evidence; it does
+not broadcast transactions or restart G0. The failed G0 enclave can be
+stopped after recovery because its raw trace was already copied.
+
 For the randomized fee mode, use the same commands with
 `--fee-mode randomized-uniform`; the mode applies to the normal transactions
 only. The signed normal fee distribution is saved in

@@ -29,7 +29,7 @@ import mp_exp5_7702_pos as delegate_tools
 import mp_exp5_7702_scale_pos as scale
 from funder import load_funder
 
-from metrics import collect
+from metrics import collect, setup_fee_totals
 from plan import schedule, validate_plan
 from normal_fee import parameters as normal_fee_parameters
 
@@ -177,7 +177,7 @@ def setup(args, config, rpc, normal, attackers, funder, out, planned):
     chain_id = int(rpc.call("eth_chainId"), 16)
     delegate, deployment_receipt = delegate_tools.deploy_delegate(
         rpc, chain_id, accounts, deploy_args, include_receipt=True)
-    setup_receipts = [dict(stage="deploy", receipt=deployment_receipt)]
+    setup_receipts = [dict(deployment_receipt, stage="deploy")]
     setup_price = str(config["setupGasPriceWei"])
     for kind, group, amount in (("normal", normal, config["normalFundEth"]),
                                 ("attack", attackers, config["attackFundEth"])):
@@ -373,10 +373,8 @@ def run(args):
         raise RuntimeError("No-drain receiver balance changed")
     summary = collect(rpc, out, config, args.client, args.group, genesis_timestamp,
                       anchor_block, anchor_slot, anchor_unix_ms, end_block)
-    setup_by_stage = {}
-    for item in json.loads((out / "setup_receipts.json").read_text()):
-        stage = item["stage"]
-        setup_by_stage[stage] = setup_by_stage.get(stage, 0) + prior.fee_wei(item["receipt"])
+    setup_by_stage = setup_fee_totals(
+        json.loads((out / "setup_receipts.json").read_text()), config)
     summary.update(receiverBalanceDeltaWei=str(receiver_after - receiver_before),
                    setupFeeWei=str(sum(setup_by_stage.values())),
                    setupFeeByStageWei={k: str(v) for k, v in setup_by_stage.items()},

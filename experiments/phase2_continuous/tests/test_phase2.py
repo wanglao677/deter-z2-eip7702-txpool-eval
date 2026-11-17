@@ -74,6 +74,27 @@ class PlanTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             validate_plan(config, rows, accounts, 60_000_000)
 
+    def test_local_funder_replaces_legacy_default_before_csv_load(self):
+        import importlib.util
+        from eth_account import Account
+        spec = importlib.util.spec_from_file_location("phase2_workload", HERE / "workload.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        original = module.base.DEFAULT_FUNDER.copy()
+        key = "0x" + "11" * 32
+        address = Account.from_key(key).address
+        self.assertNotEqual(original["address"].lower(), address.lower())
+        try:
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "key_prive_exp5.csv"
+                path.write_text("label,pub_key,priv_key\n")
+                accounts = module.load_accounts(path, dict(address=address, private_key=key))
+                self.assertEqual(accounts["funded0"]["address"].lower(), address.lower())
+                self.assertEqual(accounts["funded0"]["private_key"], key)
+        finally:
+            module.base.DEFAULT_FUNDER.clear()
+            module.base.DEFAULT_FUNDER.update(original)
+
     def test_phase_names(self):
         phase = dict(preSlots=1, attackSlots=1, postSlots=1)
         self.assertEqual([phase_for_slot(i, phase) for i in range(3)],

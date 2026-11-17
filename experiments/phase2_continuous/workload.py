@@ -132,12 +132,18 @@ def watch_pool(rpc: prior.Rpc, output: Path, stop: threading.Event):
             stop.wait(1)
 
 
-def setup(args, config, rpc, normal, attackers, funder, out, planned):
-    accounts = base.load_key_csv(args.key_csv)
-    funder_entry = accounts[base.DEFAULT_FUNDER["label"]]
-    if funder_entry["address"].lower() != funder["address"].lower():
+def load_accounts(key_csv, funder):
+    # load_key_csv inserts DEFAULT_FUNDER into the returned account map. Set the
+    # locally generated sponsor first, as Phase 1 does, before loading the CSV.
+    base.DEFAULT_FUNDER.update(funder)
+    accounts = base.load_key_csv(key_csv)
+    if accounts[base.DEFAULT_FUNDER["label"]]["address"].lower() != funder["address"].lower():
         raise RuntimeError("Local devnet funder address mismatch")
-    accounts[base.DEFAULT_FUNDER["label"]].update(funder)
+    return accounts
+
+
+def setup(args, config, rpc, normal, attackers, funder, out, planned):
+    accounts = load_accounts(args.key_csv, funder)
     genesis_balance = int(rpc.call("eth_getBalance", [funder["address"], "0x0"]), 16)
     if genesis_balance != config["funderGenesisBalanceEth"] * 10**18:
         raise RuntimeError("Funder genesis balance differs from local plan")

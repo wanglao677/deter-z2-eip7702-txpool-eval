@@ -35,8 +35,9 @@ are capacity bounds; actual gas used and paid fees come from receipts.
 The observation spans 10 pre-attack slots, 20 attack-observation slots, and
 20 post-injection-observation slots. The attack starts once at the slot-10
 boundary and is never automatically repeated. Its actual start and end are
-recorded; injection end does not imply recovery. The anchor must be within 60 seconds of the observed block timestamp,
-otherwise the run aborts before workload submission. The initial anchor slot can
+recorded; injection end does not imply recovery. The anchor must be fresh relative to the observed block timestamp: under
+60 seconds for the original 300-second slot, or under 15 seconds for the
+Erigon 60-second timing pilot. A stale anchor aborts before workload submission. The initial anchor slot can
 be empty because transactions start after its block is observed. The plan
 continues through all three phases. Missed PoS slots receive explicit rows
 with no block number and plotting gaps.
@@ -111,8 +112,8 @@ tmux new -s phase2-erigon
 python -u experiments/phase2_continuous/run.py evaluation --client erigon --group G0,G1 --seed seed01 --fee-mode fixed
 ```
 
-Each group needs at least 50 x 300 s = **4 h 10 min**, plus devnet setup,
-broadcast and receipt collection. G0/G1 together need well over 8 hours.
+With the original 300-second configuration, each group needs at least
+50 x 300 s = **4 h 10 min**, plus devnet setup, broadcast and receipt collection. G0/G1 together need well over 8 hours.
 Keep the terminal in tmux; use `Ctrl-b d` to detach. A completed group is
 stopped but not removed. Failures preserve its enclave and records for
 diagnosis, and the runner does not silently resubmit uncertain transactions.
@@ -146,6 +147,47 @@ python -u experiments/phase2_continuous/run.py evaluation --client besu --group 
 
 The runner checks the saved effective config and plan hash before appending.
 `--group all` runs all three groups in one command.
+
+## Erigon 60-second timing pilot
+
+The original `config_erigon.json` remains at 300 seconds per slot.
+`config_erigon_60s.json` changes only the name and slot duration to 60
+seconds. Keep `--config` on every command, including `init-funder`,
+`audit`, and any later `evaluation --out` call. G0, G1 and G2 use the
+same seeded normal-arrival schedule within this profile. It preserves
+600 normal arrivals per slot, 10/20/20 slots, fixed normal fees, the
+125 x 128 attack, Erigon 3.5.0 and release-default txpool policy.
+Normal submissions therefore average 10 per second. The 50-slot
+observation lasts 50 minutes per group, plus setup and collection.
+
+The prior Erigon Phase 1 attack broadcast took 18.24 seconds for 16,000
+transactions, which motivates a 60-second initial pilot; it does not
+guarantee the Phase 2 sender or node will keep up. Check
+`attackBroadcastOverranFirstSlot` in `phase_markers.json` and
+`phase2_summary.json`, normal submission lags in
+`per_block_metrics.csv`, `normalOutsideObservation`, missed slots
+and admission errors before treating the groups as comparable.
+The anchor header must be less than 15 seconds old at workload start.
+Erigon does not provide Besu's native `layertrace.jsonl`; use its
+node log, pool snapshots, receipts, and admission records without
+claiming per-layer reconstruction.
+
+This is a timing pilot, not a direct 300-second-slot replication: the
+same per-slot arrival count is compressed into one fifth the wall time.
+
+```bash
+cd ~/ETH/besu26-layertrace-eval
+source ~/ETH/pos-exp/go-ethereum-pos/.venv-exp5/bin/activate
+CFG=experiments/phase2_continuous/config_erigon_60s.json
+python experiments/phase2_continuous/run.py init-funder --client erigon --config "$CFG"
+python experiments/phase2_continuous/run.py plan --client erigon --config "$CFG" --seed seed01 --fee-mode fixed
+python experiments/phase2_continuous/run.py prepare --client erigon --config "$CFG" --seed seed01 --fee-mode fixed
+# Run G0 formally on the Ubuntu host, inside tmux:
+python -u experiments/phase2_continuous/run.py evaluation --client erigon --config "$CFG" --group G0 --seed seed01 --fee-mode fixed
+# After checking G0 timing, use its printed run directory for the matched groups:
+RUN="$(ls -td experiments/phase2_continuous/runs/phase2-erigon-continuous-60s_fixed_seed01_* | head -n 1)"
+python -u experiments/phase2_continuous/run.py evaluation --client erigon --config "$CFG" --group G1,G2 --seed seed01 --fee-mode fixed --out "$RUN"
+```
 
 ## Evidence, audit, and Figure 5-style plot
 

@@ -70,6 +70,16 @@ class ConfigTests(unittest.TestCase):
         self.assertFalse(any("slots" in x or "limit" in x for x in node["el_extra_params"]))
         self.assertEqual(n["network_params"]["seconds_per_slot"], 300)
 
+    def test_short_slot_preflight_preserves_pinned_erigon_network(self):
+        c = self.config()
+        c["secondsPerSlot"] = 60
+        validate(c)
+        network = network_config(c, "0x" + "12" * 20, "seed01")
+        self.assertEqual(network["network_params"]["seconds_per_slot"], 60)
+        c["secondsPerSlot"] = 12
+        with self.assertRaisesRegex(RuntimeError, "60s or 300s"):
+            validate(c)
+
     def test_random_prices_repeat_and_match_across_groups(self):
         c = json.loads((HERE / "config_random_fee.json").read_text())
         validate(c)

@@ -49,6 +49,26 @@ class PlanTests(unittest.TestCase):
             self.assertLess(budget["maxSenderUpfrontWei"], config["normalFundEth"] * ETH)
             self.assertEqual(config["phase2"]["normalArrivalRatePerSlot"], rate)
 
+    def test_erigon_60s_profile_keeps_matched_plan_and_gas_budget(self):
+        args = Args("erigon")
+        args.config = HERE / "config_erigon_60s.json"
+        short = load_config(args)
+        original = load_config(Args("erigon"))
+        self.assertEqual(short["secondsPerSlot"], 60)
+        self.assertEqual(original["secondsPerSlot"], 300)
+        for key in ("phase2", "normalGas", "attackGas", "attackSenders",
+                    "txsPerSender", "normalGasPriceMode"):
+            self.assertEqual(short[key], original[key])
+        accounts = self.accounts(55)
+        rows = schedule(short, "seed01", accounts, "erigon")
+        self.assertEqual(rows, schedule(short, "seed01", accounts, "erigon"))
+        self.assertLess(rows[-1]["offsetMillis"], 50 * 60 * 1000)
+        self.assertEqual(rows[0]["gasPriceWei"],
+                         short["priceUnitWei"] * short["normalPriceMultiplier"])
+        budget = validate_plan(short, rows, accounts, 60_000_000)
+        self.assertLess(budget["maxPlannedGasPerSlot"], 36_000_000)
+        self.assertLess(budget["maxSenderUpfrontWei"], short["normalFundEth"] * ETH)
+
     def test_fixed_and_randomized_prices_keep_other_parameters(self):
         fixed = load_config(Args("besu"))
         random_fee = load_config(Args("besu", "randomized-uniform"))

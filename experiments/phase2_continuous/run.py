@@ -68,8 +68,9 @@ def load_config(args):
             raise RuntimeError(f"Invalid phase2.{key}")
     if not 0 < phase["maxNormalGasBudgetBps"] < 10_000:
         raise RuntimeError("maxNormalGasBudgetBps must be below 10000")
-    if config["secondsPerSlot"] != 300:
-        raise RuntimeError("Phase 2 preserves the Phase 1 slot duration")
+    supported_slots = (300,) if args.client == "besu" else (60, 300)
+    if type(config.get("secondsPerSlot")) is not int or config["secondsPerSlot"] not in supported_slots:
+        raise RuntimeError(f"Phase 2 {args.client} supports slot durations {supported_slots}")
     return config
 
 
@@ -352,6 +353,8 @@ def main():
         rows = public_plan(args, config)
         phase = config["phase2"]
         print(json.dumps(dict(client=args.client, feeMode=config["normalGasPriceMode"],
+            secondsPerSlot=config["secondsPerSlot"],
+            observationSeconds=(phase["preSlots"] + phase["attackSlots"] + phase["postSlots"]) * config["secondsPerSlot"],
             normalTransactions=len(rows), normalArrivalRatePerSlot=phase["normalArrivalRatePerSlot"],
             maxNormalGasPerSlot=max((sum(1 for row in rows if row["slotIndex"] == slot) *
                                    config["normalGas"] for slot in range(

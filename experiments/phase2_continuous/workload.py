@@ -292,7 +292,9 @@ def run(args):
     anchor_mono = time.monotonic()
     anchor_unix_ms = int(time.time() * 1000)
     anchor_lag_ms = anchor_unix_ms - int(header["timestamp"], 16) * 1000
-    if not 0 <= anchor_lag_ms < 60_000:
+    # A 60-second slot must not start from a nearly expired anchor block.
+    max_anchor_lag_ms = min(60_000, config["secondsPerSlot"] * 1000 // 4)
+    if not 0 <= anchor_lag_ms < max_anchor_lag_ms:
         raise RuntimeError(f"Anchor header is stale or host clock differs: lag={anchor_lag_ms} ms")
     phase = config["phase2"]
     total_slots = phase["preSlots"] + phase["attackSlots"] + phase["postSlots"]
@@ -334,6 +336,9 @@ def run(args):
         markers["injectionEndUnixMillis"] = int(time.time() * 1000)
         markers["injectionEndBlock"] = rpc.height()
         markers["attackWasBroadcast"] = args.mode == "attack"
+        markers["attackBroadcastOverranFirstSlot"] = (
+            args.mode == "attack" and markers["injectionEndUnixMillis"] >=
+            anchor_unix_ms + (phase["preSlots"] + 1) * config["secondsPerSlot"] * 1000)
         save(out / "phase_markers.json", markers)
         if not sleep_until(anchor_mono + duration, stop, errors):
             raise RuntimeError("Interrupted during observation")
@@ -376,6 +381,7 @@ def run(args):
     setup_by_stage = setup_fee_totals(
         json.loads((out / "setup_receipts.json").read_text()), config)
     summary.update(receiverBalanceDeltaWei=str(receiver_after - receiver_before),
+                   attackBroadcastOverranFirstSlot=markers["attackBroadcastOverranFirstSlot"],
                    setupFeeWei=str(sum(setup_by_stage.values())),
                    setupFeeByStageWei={k: str(v) for k, v in setup_by_stage.items()},
                    attackFeeScope="post-setup attack transaction receipts within observation horizon")

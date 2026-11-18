@@ -48,7 +48,9 @@ def validate(config):
                 "G2": dict(mode="attack", delegateCase="alice-no-drain")}
     if config.get("evaluationGroups") != required:
         raise RuntimeError("G0/G1/G2 semantics changed")
-    expected = dict(erigonVersion="3.5.0", chainId=13371350, secondsPerSlot=300,
+    if type(config.get("secondsPerSlot")) is not int or config["secondsPerSlot"] not in (60, 300):
+        raise RuntimeError("Erigon preparation supports 60s or 300s PoS slots")
+    expected = dict(erigonVersion="3.5.0", chainId=13371350,
                     normalSenders=55, attackSenders=125, txsPerSender=128,
                     normalGas=21000, attackGas=500000, normalPaddingBytes=0,
                     attackFirstPaddingBytes=0, attackTailPaddingBytes=0,
